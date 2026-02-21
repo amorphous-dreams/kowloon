@@ -156,16 +156,22 @@ export default async function Add(activity) {
         // If user was in pending (i.e., this was an approval), notify them
         if (pendingRemoval.modifiedCount > 0) {
           try {
-            await createNotification({
-              type: "join_approved",
-              recipientId: activity.object.id,
-              actorId: activity.actorId, // The admin who approved
-              objectId: ownerId,
-              objectType: "Group",
-              activityId: activity.id,
-              activityType: "Add",
-              groupKey: `join_approved:${ownerId}:${activity.object.id}`,
-            });
+            // Check if user wants join_approved notifications (default true)
+            const recipient = await User.findOne({ id: activity.object.id }).select("prefs").lean();
+            const wantsNotification = recipient?.prefs?.notifications?.join_approved !== false;
+
+            if (wantsNotification) {
+              await createNotification({
+                type: "join_approved",
+                recipientId: activity.object.id,
+                actorId: activity.actorId, // The admin who approved
+                objectId: ownerId,
+                objectType: "Group",
+                activityId: activity.id,
+                activityType: "Add",
+                groupKey: `join_approved:${ownerId}:${activity.object.id}`,
+              });
+            }
           } catch (err) {
             console.error("Failed to create join_approved notification:", err.message);
             // Non-fatal

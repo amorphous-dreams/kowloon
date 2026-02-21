@@ -20,6 +20,8 @@ const notificationSchema = new mongoose.Schema(
       enum: [
         "reply", // Someone replied to your post
         "react", // Someone reacted to your post
+        "follow", // Someone followed you
+        "new_post", // Someone you follow posted (opt-in via prefs)
         "join_request", // Someone requested to join your group
         "join_approved", // Your join request was approved
       ],

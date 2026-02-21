@@ -78,8 +78,13 @@ export default async function Reply(activity, ctx = {}) {
   }
 
   // The 'to' field in Reply activity is the post ID being replied to
-  // For Create activity, 'to' should be empty to use defaults
-  a.to = "";
+  // For Create activity, 'to' should be the audience for the reply
+  // Default to @public if no audience specified via an explicit audience field
+  a.to = activity.audience || "@public";
+
+  // Ensure canReply and canReact have defaults for replies
+  if (!a.canReply) a.canReply = "@public";
+  if (!a.canReact) a.canReact = "@public";
 
   // 3. Delegate to Create handler to persist the Post/Reply
   return await Create(a, ctx);

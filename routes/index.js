@@ -177,11 +177,7 @@ if (process.env.NODE_ENV !== "production") {
   router.post("/__test/wipe", testWipe.default);
 }
 
-// Server inbox for receiving federated activities
-const inbox = await import("./inbox.js");
-router.post("/inbox", inbox.default);
-mounted.push({ mountPath: "/inbox", subrouter: inbox.default });
-console.log("routes: mounted /inbox");
+// Note: /inbox is now auto-mounted from routes/inbox/index.js directory
 
 // Optional: log at boot
 if (process.env.ROUTE_DEBUG) {

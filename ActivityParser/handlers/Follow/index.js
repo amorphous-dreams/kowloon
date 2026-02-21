@@ -3,6 +3,7 @@ import { Circle, User, Server } from "#schema";
 import toMember from "#methods/parse/toMember.js";
 import kowloonId from "#methods/parse/kowloonId.js";
 import isLocalDomain from "#methods/parse/isLocalDomain.js";
+import createNotification from "#methods/notifications/create.js";
 
 /**
  * Type-specific validation for Follow activities
@@ -170,6 +171,29 @@ export default async function Follow(activity) {
     );
 
     const added = !!(res && (res.modifiedCount > 0 || res.upsertedCount > 0));
+
+    // Create notification for local users being followed (if they have it enabled)
+    if (added && localUser) {
+      try {
+        // Check if user wants follow notifications (default true)
+        const wantsNotification = localUser.prefs?.notifications?.follow !== false;
+        if (wantsNotification) {
+          await createNotification({
+            type: "follow",
+            recipientId: followedUserId,
+            actorId: activity.actorId,
+            objectId: activity.actorId, // The follower is the "object" of interest
+            objectType: "User",
+            activityId: activity.id,
+            activityType: "Follow",
+            groupKey: `follow:${followedUserId}:${activity.actorId}`,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to create follow notification:", err.message);
+        // Non-fatal
+      }
+    }
 
     // Update Server collection for remote follows
     const followedUser = activity.object; // e.g., @user@remote.domain or @remote.domain

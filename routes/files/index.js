@@ -22,6 +22,9 @@ const uploadMiddleware = multer({
 // POST /files - Upload a file
 router.post('/', uploadMiddleware.single('file'), upload);
 
+// POST /files/upload - Upload alias
+router.post('/upload', uploadMiddleware.single('file'), upload);
+
 // GET /files/:key - Get file metadata
 router.get('/:key', get);
 

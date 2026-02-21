@@ -25,7 +25,7 @@ const defaultSettings = (ctx) => {
       urls: [`https://${ctx.DOMAIN}`],
     },
     domain: ctx.DOMAIN,
-    registrationIsOpen: false,
+    registrationIsOpen: true,
     maxUploadSize: 100,
     defaultPronouns: {
       subject: "they",

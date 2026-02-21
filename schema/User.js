@@ -47,6 +47,8 @@ const UserSchemaDef = {
     notifications: {
       reply: { type: Boolean, default: true },
       react: { type: Boolean, default: true },
+      follow: { type: Boolean, default: true },
+      new_post: { type: Boolean, default: false }, // Opt-in: can be noisy
       join_request: { type: Boolean, default: true },
       join_approved: { type: Boolean, default: true },
     },

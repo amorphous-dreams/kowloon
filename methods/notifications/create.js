@@ -8,7 +8,7 @@ import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 /**
  * Create a notification
  * @param {Object} params
- * @param {string} params.type - Notification type (reply, react, mention, new_post, invite, join_request, join_approved)
+ * @param {string} params.type - Notification type (reply, react, follow, new_post, join_request, join_approved)
  * @param {string} params.recipientId - User ID who receives the notification
  * @param {string} params.actorId - User ID who triggered the notification
  * @param {string} [params.objectId] - ID of the object involved (post, group, etc.)
@@ -110,12 +110,10 @@ function generateSummary(type, actorName, objectType) {
       return `${actorName} replied to your post`;
     case "react":
       return `${actorName} reacted to your post`;
-    case "mention":
-      return `${actorName} mentioned you in a post`;
+    case "follow":
+      return `${actorName} followed you`;
     case "new_post":
-      return `${actorName} created a new post`;
-    case "invite":
-      return `${actorName} invited you to a group`;
+      return `${actorName} posted`;
     case "join_request":
       return `${actorName} requested to join your group`;
     case "join_approved":

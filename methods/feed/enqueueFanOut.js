@@ -1,127 +1,303 @@
 // /methods/feed/enqueueFanOut.js
-// Enqueues a FeedItems entry for asynchronous fan-out to Feed collection
-// Follows the pattern established by methods/federation/enqueueOutbox.js
+// Creates FeedFanOut records for timeline queries
+//
+// Record types:
+// - Public post: ONE record with to: "@public"
+// - Server post: ONE record with to: "@server"
+// - Circle post: N records (one per member) with to: <member actorId>
+// - Public Group post: ONE record with to: "@public", groupId set
+// - Private Group post: N records per member, groupId set
+// - Reply: inherits addressing from parent (handled by caller)
 
 import crypto from "crypto";
-import { FeedFanOut } from "#schema";
+import { FeedFanOut, Circle, Group } from "#schema";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 
 /**
- * Generate a dedupe hash to prevent duplicate fan-out jobs
- * @param {string} feedCacheId - The FeedItems ID
+ * Generate a dedupe hash
+ * @param {string} feedItemId - The FeedItems ID
+ * @param {string} to - The audience value
  * @returns {string}
  */
-function generateDedupeHash(feedCacheId) {
-  return crypto.createHash("sha256").update(feedCacheId).digest("hex");
+function generateDedupeHash(feedItemId, to) {
+  return crypto
+    .createHash("sha256")
+    .update(`${feedItemId}:${to}`)
+    .digest("hex");
 }
 
 /**
- * Extract LOCAL circle/group IDs from audience strings
+ * Parse the "to" field to determine audience type
  * @param {string} to - Audience "to" field
- * @param {string} canReply - Audience "canReply" field
- * @param {string} canReact - Audience "canReact" field
- * @returns {string[]} Array of LOCAL addressed IDs
+ * @returns {Object} { type: 'public'|'server'|'circle'|'group', ids: string[] }
  */
-function extractAddressedIds(to, canReply, canReact) {
-  const { domain } = getServerSettings();
+function parseAudience(to) {
+  if (!to) return { type: "public", ids: [] };
+
+  const { domain, actorId: serverActorId } = getServerSettings();
+  const lower = to.toLowerCase().trim();
+
+  // Check for public
+  if (lower === "@public" || lower === "public") {
+    return { type: "public", ids: [] };
+  }
+
+  // Check for server
+  if (lower === "@server" || lower === "server" || lower === `@${domain}`) {
+    return { type: "server", ids: [] };
+  }
+
+  // Parse tokens for Circle/Group IDs
+  const tokens = to.split(/\s+/).filter(Boolean);
   const localDomain = domain?.toLowerCase();
 
-  const allTokens = [to, canReply, canReact]
-    .filter(Boolean)
-    .join(" ")
-    .split(/\s+/)
-    .filter(Boolean);
+  const circleIds = [];
+  const groupIds = [];
 
-  const ids = allTokens.filter(
-    (token) =>
-      token.startsWith("circle:") ||
-      token.startsWith("group:")
-  );
+  for (const token of tokens) {
+    // Check if it's a local ID
+    const [, domainPart] = token.split("@");
+    if (domainPart?.toLowerCase() !== localDomain) continue;
 
-  // Filter to LOCAL IDs only (same domain)
-  const localIds = ids.filter((id) => {
-    const [, domainPart] = id.split("@");
-    return domainPart?.toLowerCase() === localDomain;
-  });
+    if (token.startsWith("circle:")) {
+      circleIds.push(token);
+    } else if (token.startsWith("group:")) {
+      groupIds.push(token);
+    }
+  }
 
-  // Deduplicate
-  return [...new Set(localIds)];
+  if (circleIds.length > 0) {
+    return { type: "circle", ids: circleIds };
+  }
+
+  if (groupIds.length > 0) {
+    return { type: "group", ids: groupIds };
+  }
+
+  // Default to public if we can't parse
+  return { type: "public", ids: [] };
 }
 
 /**
- * Enqueue a feed fan-out job for a FeedItems entry
+ * Create FeedFanOut records for a post
+ *
  * @param {Object} options
- * @param {string} options.feedCacheId - The FeedItems.id to fan out
+ * @param {string} options.feedItemId - The FeedItems.id
  * @param {string} options.objectType - The object type (Post/Reply/Page/etc)
  * @param {string} options.actorId - The author/creator
  * @param {Object} options.audience - Audience snapshot { to, canReply, canReact }
- * @returns {Promise<Object>} The created fan-out job
+ * @returns {Promise<Object>} Summary of created records
  */
 export default async function enqueueFeedFanOut({
-  feedCacheId,
+  feedItemId,
+  feedCacheId, // deprecated, use feedItemId
   objectType,
   actorId,
   audience = {},
 }) {
-  if (!feedCacheId || !objectType || !actorId) {
+  const itemId = feedItemId || feedCacheId;
+
+  if (!itemId || !objectType || !actorId) {
     throw new Error(
-      "enqueueFeedFanOut requires feedCacheId, objectType, and actorId"
+      "enqueueFeedFanOut requires feedItemId, objectType, and actorId"
     );
   }
 
-  const dedupeHash = generateDedupeHash(feedCacheId);
+  const { to, canReply, canReact } = audience;
+  const { domain } = getServerSettings();
+  const parsed = parseAudience(to);
 
-  // Check for existing job (idempotent)
-  const existing = await FeedFanOut.findOne({ dedupeHash }).lean();
-  if (existing) {
-    const existingId = existing.id || existing._id?.toString();
-    console.log(`Feed fan-out job already exists for ${feedCacheId}`, {
-      jobId: existingId,
-      status: existing.status,
+  const operations = [];
+
+  // PUBLIC: One record with to: "@public"
+  if (parsed.type === "public") {
+    operations.push({
+      updateOne: {
+        filter: { dedupeHash: generateDedupeHash(itemId, "@public") },
+        update: {
+          $setOnInsert: {
+            feedItemId: itemId,
+            objectType,
+            actorId,
+            to: "@public",
+            groupId: null,
+            reason: "public",
+            canReply: canReply || "public",
+            canReact: canReact || "public",
+            dedupeHash: generateDedupeHash(itemId, "@public"),
+          },
+        },
+        upsert: true,
+      },
     });
-    return {
-      jobId: existingId,
-      status: existing.status,
-      counts: existing.counts,
-      duplicate: true,
-    };
   }
 
-  // Extract LOCAL addressed IDs
-  const addressedIds = extractAddressedIds(
-    audience.to,
-    audience.canReply,
-    audience.canReact
-  );
+  // SERVER: One record with to: "@server"
+  else if (parsed.type === "server") {
+    operations.push({
+      updateOne: {
+        filter: { dedupeHash: generateDedupeHash(itemId, "@server") },
+        update: {
+          $setOnInsert: {
+            feedItemId: itemId,
+            objectType,
+            actorId,
+            to: "@server",
+            groupId: null,
+            reason: "server",
+            canReply: canReply || "public",
+            canReact: canReact || "public",
+            dedupeHash: generateDedupeHash(itemId, "@server"),
+          },
+        },
+        upsert: true,
+      },
+    });
+  }
 
-  // Create fan-out job
-  const job = await FeedFanOut.create({
-    feedCacheId,
-    objectType,
-    actorId,
-    status: "pending",
-    audience: {
-      to: audience.to || "public",
-      canReply: audience.canReply || "public",
-      canReact: audience.canReact || "public",
-      addressedIds, // LOCAL circle/group IDs only
-    },
-    dedupeHash,
-    attempts: 0,
-    nextAttemptAt: new Date(), // immediately available
-  });
+  // CIRCLE: N records (one per member)
+  else if (parsed.type === "circle") {
+    const circles = await Circle.find({ id: { $in: parsed.ids } }).lean();
 
-  const jobId = job.id || job._id?.toString();
-  console.log(`Feed fan-out job enqueued for ${feedCacheId}`, {
-    jobId,
+    const memberIds = new Set();
+    for (const circle of circles) {
+      for (const member of circle.members || []) {
+        if (member.id) memberIds.add(member.id);
+      }
+    }
+
+    // Add author
+    const isLocalAuthor = actorId?.toLowerCase().endsWith(`@${domain?.toLowerCase()}`);
+    if (isLocalAuthor) memberIds.add(actorId);
+
+    for (const memberId of memberIds) {
+      operations.push({
+        updateOne: {
+          filter: { dedupeHash: generateDedupeHash(itemId, memberId) },
+          update: {
+            $setOnInsert: {
+              feedItemId: itemId,
+              objectType,
+              actorId,
+              to: memberId,
+              groupId: null,
+              reason: "circle",
+              canReply: canReply || "public",
+              canReact: canReact || "public",
+              dedupeHash: generateDedupeHash(itemId, memberId),
+            },
+          },
+          upsert: true,
+        },
+      });
+    }
+  }
+
+  // GROUP: Depends on group visibility
+  else if (parsed.type === "group") {
+    const groups = await Group.find({ id: { $in: parsed.ids } }).lean();
+
+    for (const group of groups) {
+      const groupTo = group.to?.toLowerCase();
+      const isPublicGroup = !groupTo || groupTo === "@public" || groupTo === "public";
+      const isServerGroup = groupTo === "@server" || groupTo === "server" || groupTo === `@${domain}`;
+
+      if (isPublicGroup) {
+        // Public group: ONE record with to: "@public", groupId set
+        operations.push({
+          updateOne: {
+            filter: { dedupeHash: generateDedupeHash(itemId, `@public:${group.id}`) },
+            update: {
+              $setOnInsert: {
+                feedItemId: itemId,
+                objectType,
+                actorId,
+                to: "@public",
+                groupId: group.id,
+                reason: "group",
+                canReply: canReply || "public",
+                canReact: canReact || "public",
+                dedupeHash: generateDedupeHash(itemId, `@public:${group.id}`),
+              },
+            },
+            upsert: true,
+          },
+        });
+      } else if (isServerGroup) {
+        // Server group: ONE record with to: "@server", groupId set
+        operations.push({
+          updateOne: {
+            filter: { dedupeHash: generateDedupeHash(itemId, `@server:${group.id}`) },
+            update: {
+              $setOnInsert: {
+                feedItemId: itemId,
+                objectType,
+                actorId,
+                to: "@server",
+                groupId: group.id,
+                reason: "group",
+                canReply: canReply || "public",
+                canReact: canReact || "public",
+                dedupeHash: generateDedupeHash(itemId, `@server:${group.id}`),
+              },
+            },
+            upsert: true,
+          },
+        });
+      } else {
+        // Private group: N records per member
+        const memberIds = new Set();
+        for (const member of group.members || []) {
+          if (member.id) memberIds.add(member.id);
+        }
+
+        // Add author
+        const isLocalAuthor = actorId?.toLowerCase().endsWith(`@${domain?.toLowerCase()}`);
+        if (isLocalAuthor) memberIds.add(actorId);
+
+        for (const memberId of memberIds) {
+          operations.push({
+            updateOne: {
+              filter: { dedupeHash: generateDedupeHash(itemId, `${memberId}:${group.id}`) },
+              update: {
+                $setOnInsert: {
+                  feedItemId: itemId,
+                  objectType,
+                  actorId,
+                  to: memberId,
+                  groupId: group.id,
+                  reason: "group",
+                  canReply: canReply || "public",
+                  canReact: canReact || "public",
+                  dedupeHash: generateDedupeHash(itemId, `${memberId}:${group.id}`),
+                },
+              },
+              upsert: true,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  if (operations.length === 0) {
+    console.log(`No FeedFanOut records to create for: ${itemId}`);
+    return { created: 0, total: 0 };
+  }
+
+  // Bulk upsert (idempotent)
+  const result = await FeedFanOut.bulkWrite(operations);
+  const created = result.upsertedCount || 0;
+
+  console.log(`FeedFanOut for ${itemId}: ${created} created, ${operations.length - created} existing`, {
+    type: parsed.type,
     objectType,
     actorId,
   });
 
   return {
-    jobId,
-    status: "pending",
-    counts: job.counts,
-    duplicate: false,
+    created,
+    existing: operations.length - created,
+    total: operations.length,
   };
 }

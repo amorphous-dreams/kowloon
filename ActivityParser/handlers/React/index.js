@@ -9,6 +9,7 @@ import {
   Page,
   Bookmark,
   Group,
+  User,
 } from "#schema";
 import getFederationTargetsHelper from "../utils/getFederationTargets.js";
 import createNotification from "#methods/notifications/create.js";
@@ -130,7 +131,7 @@ export default async function React(activity, ctx = {}) {
 
     const result = { status: "reacted", react: reactKind, bumped };
 
-    // Create notification for the author of the target object
+    // Create notification for the author of the target object (if they have it enabled)
     try {
       // Find the target object to get its author
       let targetAuthorId;
@@ -148,16 +149,22 @@ export default async function React(activity, ctx = {}) {
       }
 
       if (targetAuthorId) {
-        await createNotification({
-          type: "react",
-          recipientId: targetAuthorId,
-          actorId,
-          objectId: targetId,
-          objectType: "Post", // Could be more specific, but Post covers most cases
-          activityId: activity.id,
-          activityType: "React",
-          groupKey: `react:${targetId}`,
-        });
+        // Check if user wants react notifications (default true)
+        const recipient = await User.findOne({ id: targetAuthorId }).select("prefs").lean();
+        const wantsNotification = recipient?.prefs?.notifications?.react !== false;
+
+        if (wantsNotification) {
+          await createNotification({
+            type: "react",
+            recipientId: targetAuthorId,
+            actorId,
+            objectId: targetId,
+            objectType: "Post", // Could be more specific, but Post covers most cases
+            activityId: activity.id,
+            activityType: "React",
+            groupKey: `react:${targetId}`,
+          });
+        }
       }
     } catch (err) {
       console.error("Failed to create notification for React:", err.message);

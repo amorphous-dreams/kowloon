@@ -169,19 +169,20 @@ async function writeFeedItems(created, objectType) {
       { upsert: true, new: true }
     );
 
-    // Enqueue fan-out job (async processing)
+    // Enqueue fan-out records (one per recipient for Circle/Group-addressed content)
+    // Pass original values (with Circle IDs) for member resolution, not normalized coarse values
     try {
       const { default: enqueueFeedFanOut } = await import(
         "#methods/feed/enqueueFanOut.js"
       );
       await enqueueFeedFanOut({
-        feedCacheId: created.id,
+        feedItemId: created.id,
         objectType,
         actorId: created.actorId,
         audience: {
-          to: cacheEntry.to,
-          canReply: cacheEntry.canReply,
-          canReact: cacheEntry.canReact,
+          to: created.to, // Original addressing with Circle/Group IDs
+          canReply: created.canReply || "public",
+          canReact: created.canReact || "public",
         },
       });
     } catch (err) {
@@ -199,8 +200,7 @@ async function writeFeedItems(created, objectType) {
 
 /**
  * Create notifications for relevant activities
- * - Reply: Notify the author of the post being replied to
- * - Post with mentions: Notify mentioned users (TBD)
+ * - Reply: Notify the author of the post being replied to (if they have it enabled)
  */
 async function createNotifications(activity, created, objectType) {
   try {
@@ -213,21 +213,24 @@ async function createNotifications(activity, created, objectType) {
       const originalPost = await Post.findOne({ id: created.inReplyTo }).lean();
 
       if (originalPost && originalPost.actorId) {
-        await createNotification({
-          type: "reply",
-          recipientId: originalPost.actorId,
-          actorId: activity.actorId,
-          objectId: created.id,
-          objectType: "Reply",
-          activityId: activity.id,
-          activityType: "Create",
-          groupKey: `reply:${originalPost.id}`,
-        });
+        // Check if user wants reply notifications (default true)
+        const recipient = await User.findOne({ id: originalPost.actorId }).select("prefs").lean();
+        const wantsNotification = recipient?.prefs?.notifications?.reply !== false;
+
+        if (wantsNotification) {
+          await createNotification({
+            type: "reply",
+            recipientId: originalPost.actorId,
+            actorId: activity.actorId,
+            objectId: created.id,
+            objectType: "Reply",
+            activityId: activity.id,
+            activityType: "Create",
+            groupKey: `reply:${originalPost.id}`,
+          });
+        }
       }
     }
-
-    // TODO: Check for mentions in content and notify mentioned users
-
   } catch (err) {
     console.error("Failed to create notifications for Create activity:", err.message);
     // Non-fatal: don't block object creation if notification fails

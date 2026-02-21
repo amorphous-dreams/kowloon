@@ -7,7 +7,7 @@
 import jwt from "jsonwebtoken";
 import route from "#routes/utils/route.js";
 import getSettings from "#methods/settings/get.js";
-import { User } from "#schema";
+import { User, Invite } from "#schema";
 
 const isObj = (v) => v && typeof v === "object" && !Array.isArray(v);
 const isNonEmpty = (s) => typeof s === "string" && s.trim().length > 0;
@@ -57,12 +57,60 @@ export default route(
 
     // Optional: toggleable self-registration (defaults to enabled)
     const registrationIsOpen = settings.registrationIsOpen !== false;
+    const inviteCode = isNonEmpty(body.inviteCode) ? body.inviteCode.trim() : null;
+
+    // If registration is closed, require an invite code
+    let invite = null;
     if (!registrationIsOpen) {
-      setStatus(403);
-      return { error: "Registration disabled" };
+      if (!inviteCode) {
+        setStatus(403);
+        return { error: "Registration is invite-only. Please provide an invite code." };
+      }
+
+      // Find and validate the invite
+      invite = await Invite.findOne({
+        code: inviteCode,
+        active: true,
+        deletedAt: null,
+      });
+
+      if (!invite) {
+        setStatus(404);
+        return { error: "Invalid invite code" };
+      }
+
+      if (!invite.isValid) {
+        // Determine specific reason
+        let reason = "Invite is no longer valid";
+        if (invite.expiresAt && new Date() > invite.expiresAt) {
+          reason = "Invite has expired";
+        } else if (invite.type === "individual" && invite.usedAt) {
+          reason = "Invite has already been used";
+        } else if (
+          invite.type === "open" &&
+          invite.maxRedemptions !== null &&
+          invite.redemptionCount >= invite.maxRedemptions
+        ) {
+          reason = "Invite has reached its redemption limit";
+        }
+        setStatus(410);
+        return { error: reason };
+      }
     }
 
     const input = pickUserInput(body);
+
+    // For individual invites, verify email matches
+    if (invite && invite.type === "individual") {
+      if (!isNonEmpty(input.email)) {
+        setStatus(400);
+        return { error: "Email is required for this invite" };
+      }
+      if (input.email.toLowerCase() !== invite.email.toLowerCase()) {
+        setStatus(403);
+        return { error: "This invite is for a different email address" };
+      }
+    }
 
     if (!isNonEmpty(input.username)) {
       setStatus(400);
@@ -99,6 +147,16 @@ export default route(
       canReply: input.canReply,
       canReact: input.canReact,
     });
+
+    // Redeem the invite if one was used
+    if (invite) {
+      try {
+        await invite.redeem(created.id, input.email);
+      } catch (err) {
+        // Log but don't fail registration - user is already created
+        console.error("Failed to redeem invite after registration:", err.message);
+      }
+    }
 
     // Sign RS256 JWT shaped for routes/middleware/attachUser.js
     // attachUser expects payload.user.id to look up the user.

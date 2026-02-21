@@ -2,6 +2,8 @@
 import { Group, Circle, User } from "#schema";
 import getFederationTargetsHelper from "../utils/getFederationTargets.js";
 import createNotification from "#methods/notifications/create.js";
+import kowloonId from "#methods/parse/kowloonId.js";
+import isLocalDomain from "#methods/parse/isLocalDomain.js";
 
 /**
  * Type-specific validation for Join activities
@@ -70,10 +72,30 @@ export default async function Join(activity, ctx = {}) {
         };
     }
 
-    // Policy
+    // Policy check
+    // - open: anyone can join without approval
+    // - serverOpen: local server members join freely, remote users need approval
+    // - serverApproval: only local server members can join, with approval
+    // - approvalOnly: everyone needs approval
     const policy = target.rsvpPolicy || "open";
+    const parsed = kowloonId(actorId);
+    const actorIsLocal = parsed.domain && isLocalDomain(parsed.domain);
 
-    if (policy === "approval") {
+    // Determine if this actor needs approval or is denied
+    let needsApproval = false;
+    if (policy === "approvalOnly") {
+      needsApproval = true;
+    } else if (policy === "serverOpen") {
+      needsApproval = !actorIsLocal; // remote users need approval
+    } else if (policy === "serverApproval") {
+      if (!actorIsLocal) {
+        return { activity, error: "Join: only server members can join this group" };
+      }
+      needsApproval = true;
+    }
+    // policy === "open" → needsApproval stays false
+
+    if (needsApproval) {
       // Add to pending circle for admin approval
       const pendingCircle = target.circles?.pending;
       if (!pendingCircle) {
@@ -102,7 +124,7 @@ export default async function Join(activity, ctx = {}) {
         { $push: { members: member }, $inc: { memberCount: 1 } }
       );
 
-      // Notify all group admins about the join request (only if actually added to pending)
+      // Notify group admins about the join request (only if actually added to pending)
       if (updateRes.modifiedCount > 0 && target.circles?.admins) {
         try {
           const adminCircle = await Circle.findOne({ id: target.circles.admins })
@@ -110,9 +132,25 @@ export default async function Join(activity, ctx = {}) {
             .lean();
 
           if (adminCircle?.members?.length > 0) {
-            // Create notification for each admin
-            await Promise.all(
-              adminCircle.members.map((admin) =>
+            // Get admin IDs and fetch their prefs
+            const adminIds = adminCircle.members.map((m) => m.id).filter(Boolean);
+            const adminsWithPrefs = await User.find({ id: { $in: adminIds } })
+              .select("id prefs")
+              .lean();
+
+            // Build map of who wants notifications
+            const wantsNotification = new Map();
+            for (const admin of adminsWithPrefs) {
+              wantsNotification.set(
+                admin.id,
+                admin.prefs?.notifications?.join_request !== false
+              );
+            }
+
+            // Create notification for admins who want them
+            const notificationPromises = adminCircle.members
+              .filter((admin) => wantsNotification.get(admin.id) !== false)
+              .map((admin) =>
                 createNotification({
                   type: "join_request",
                   recipientId: admin.id,
@@ -123,8 +161,11 @@ export default async function Join(activity, ctx = {}) {
                   activityType: "Join",
                   groupKey: `join_request:${targetId}:${actorId}`,
                 })
-              )
-            );
+              );
+
+            if (notificationPromises.length > 0) {
+              await Promise.all(notificationPromises);
+            }
           }
         } catch (err) {
           console.error("Failed to create join_request notifications:", err.message);
@@ -141,10 +182,8 @@ export default async function Join(activity, ctx = {}) {
         result,
         federation,
       };
-    } else if (policy !== "open") {
-      return { activity, error: `Join: unsupported policy "${policy}"` };
     }
-    // Proceed for open policy
+    // Proceed for open join (no approval needed)
 
     // Build member object (light enrichment if local user exists)
     const u = await User.findOne({ id: actorId }).lean();

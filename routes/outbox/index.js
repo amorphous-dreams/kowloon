@@ -1,6 +1,7 @@
 import express from "express";
 import post from "./post.js";
 import get from "./get.js";
+import collection from "./collection.js";
 
 const router = express.Router({ mergeParams: true });
 
@@ -64,6 +65,7 @@ function authGate(req, res, next) {
 }
 
 // Mount handlers
+router.get("/", collection); // S2S pull federation (HTTP Signature auth, handled internally)
 router.post("/", authGate, post);
 router.get("/:id", requireAuth, get);
 

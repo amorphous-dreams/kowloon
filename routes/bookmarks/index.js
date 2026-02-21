@@ -1,16 +1,12 @@
+// routes/bookmarks/index.js
+
 import express from "express";
 import collection from "./collection.js";
-import server from "./server.js";
 import id from "./id.js";
-import replies from "./replies.js";
-import reacts from "./reacts.js";
 
 const router = express.Router({ mergeParams: true });
 
 router.get("/", collection);
-router.get("/server", server);
 router.get("/:id", id);
-router.get("/:id/replies", replies);
-router.get("/:id/reacts", reacts);
 
 export default router;
