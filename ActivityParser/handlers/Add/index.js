@@ -140,9 +140,30 @@ export default async function Add(activity) {
       }
     );
 
-    // If adding to a Group's members circle, remove from pending circle and notify user
+    // If adding to a Group's members circle, update user's Groups circle, remove from pending, and notify
     if (ownerType === "Group" && res.modifiedCount > 0) {
-      const group = await Group.findOne({ id: ownerId }).select("circles name").lean();
+      const group = await Group.findOne({ id: ownerId }).lean();
+
+      // Add group to user's Groups circle
+      if (group?.circles?.members === activity.target) {
+        const addedUser = await User.findOne({ id: activity.object.id }).select("circles").lean();
+        if (addedUser?.circles?.groups) {
+          const groupMember = {
+            id: group.id,
+            name: group.name || "",
+            icon: group.icon || "",
+            url: group.url || "",
+            inbox: group.inbox || "",
+            outbox: group.outbox || "",
+            server: group.server || "",
+          };
+          await Circle.updateOne(
+            { id: addedUser.circles.groups, "members.id": { $ne: group.id } },
+            { $push: { members: groupMember }, $inc: { memberCount: 1 } }
+          );
+        }
+      }
+
       if (group?.circles?.members === activity.target && group?.circles?.pending) {
         // Remove from pending circle if they were there
         const pendingRemoval = await Circle.updateOne(

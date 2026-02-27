@@ -1,5 +1,6 @@
-// routes/users/notifications.js
-// Notification endpoints scoped to /users/:id/notifications
+// routes/notifications/index.js
+// Convenience redirect: /notifications/* -> /users/:id/notifications/*
+// Resolves the authenticated user's ID so clients don't need to know it.
 
 import express from "express";
 import route from "../utils/route.js";
@@ -9,40 +10,28 @@ import { getSetting } from "#methods/settings/cache.js";
 
 const router = express.Router({ mergeParams: true });
 
-// Auth + ownership guard: only the user themselves can access their notifications
-function ownerOnly(user, params, setStatus, set) {
+function requireAuth(user, setStatus, set) {
   if (!user?.id) {
     setStatus(401);
     set("error", "Authentication required");
     return false;
   }
-  const userId = decodeURIComponent(params.id);
-  if (user.id !== userId) {
-    setStatus(403);
-    set("error", "Access denied");
-    return false;
-  }
   return true;
 }
 
-// GET /users/:id/notifications
+// GET /notifications
 router.get(
   "/",
-  route(async ({ req, params, query, user, set, setStatus }) => {
-    if (!ownerOnly(user, params, setStatus, set)) return;
+  route(async ({ req, query, user, set, setStatus }) => {
+    if (!requireAuth(user, setStatus, set)) return;
 
     const page = Math.max(1, parseInt(query.page, 10) || 1);
     const limit = Math.min(Math.max(1, parseInt(query.limit, 10) || 20), 100);
     const skip = (page - 1) * limit;
 
-    const filter = {
-      recipientId: user.id,
-      dismissed: false,
-    };
-
+    const filter = { recipientId: user.id, dismissed: false };
     if (query.types) {
-      const typeArray = query.types.split(",").map((t) => t.trim());
-      filter.type = { $in: typeArray };
+      filter.type = { $in: query.types.split(",").map((t) => t.trim()) };
     }
     if (query.unread === "true") {
       filter.read = false;
@@ -59,7 +48,7 @@ router.get(
 
     const domain = getSetting("domain");
     const protocol = req.headers["x-forwarded-proto"] || "https";
-    const base = `${protocol}://${domain}/users/${encodeURIComponent(user.id)}/notifications`;
+    const base = `${protocol}://${domain}/notifications`;
 
     const collection = activityStreamsCollection({
       id: `${base}?page=${page}`,
@@ -76,18 +65,13 @@ router.get(
   })
 );
 
-// GET /users/:id/notifications/unread/count
+// GET /notifications/unread/count
 router.get(
   "/unread/count",
-  route(async ({ params, query, user, set, setStatus }) => {
-    if (!ownerOnly(user, params, setStatus, set)) return;
+  route(async ({ query, user, set, setStatus }) => {
+    if (!requireAuth(user, setStatus, set)) return;
 
-    const filter = {
-      recipientId: user.id,
-      read: false,
-      dismissed: false,
-    };
-
+    const filter = { recipientId: user.id, read: false, dismissed: false };
     if (query.types) {
       filter.type = { $in: query.types.split(",").map((t) => t.trim()) };
     }
@@ -97,12 +81,12 @@ router.get(
   })
 );
 
-// POST /users/:id/notifications/:notifId/read
+// POST /notifications/:notifId/read
 router.post(
   "/:notifId/read",
   route(
     async ({ params, user, set, setStatus }) => {
-      if (!ownerOnly(user, params, setStatus, set)) return;
+      if (!requireAuth(user, setStatus, set)) return;
 
       const notification = await Notification.findOneAndUpdate(
         { id: params.notifId, recipientId: user.id },
@@ -122,38 +106,12 @@ router.post(
   )
 );
 
-// POST /users/:id/notifications/read-all
-router.post(
-  "/read-all",
-  route(
-    async ({ params, query, user, set, setStatus }) => {
-      if (!ownerOnly(user, params, setStatus, set)) return;
-
-      const filter = {
-        recipientId: user.id,
-        read: false,
-      };
-
-      if (query.types) {
-        filter.type = { $in: query.types.split(",").map((t) => t.trim()) };
-      }
-
-      const result = await Notification.updateMany(filter, {
-        $set: { read: true },
-      });
-
-      set("count", result.modifiedCount);
-    },
-    { allowUnauth: false }
-  )
-);
-
-// POST /users/:id/notifications/:notifId/unread
+// POST /notifications/:notifId/unread
 router.post(
   "/:notifId/unread",
   route(
     async ({ params, user, set, setStatus }) => {
-      if (!ownerOnly(user, params, setStatus, set)) return;
+      if (!requireAuth(user, setStatus, set)) return;
 
       const notification = await Notification.findOneAndUpdate(
         { id: params.notifId, recipientId: user.id },
@@ -173,12 +131,34 @@ router.post(
   )
 );
 
-// POST /users/:id/notifications/:notifId/dismiss
+// POST /notifications/read-all
+router.post(
+  "/read-all",
+  route(
+    async ({ query, user, set, setStatus }) => {
+      if (!requireAuth(user, setStatus, set)) return;
+
+      const filter = { recipientId: user.id, read: false };
+      if (query.types) {
+        filter.type = { $in: query.types.split(",").map((t) => t.trim()) };
+      }
+
+      const result = await Notification.updateMany(filter, {
+        $set: { read: true },
+      });
+
+      set("count", result.modifiedCount);
+    },
+    { allowUnauth: false }
+  )
+);
+
+// POST /notifications/:notifId/dismiss
 router.post(
   "/:notifId/dismiss",
   route(
     async ({ params, user, set, setStatus }) => {
-      if (!ownerOnly(user, params, setStatus, set)) return;
+      if (!requireAuth(user, setStatus, set)) return;
 
       const notification = await Notification.findOneAndUpdate(
         { id: params.notifId, recipientId: user.id },
