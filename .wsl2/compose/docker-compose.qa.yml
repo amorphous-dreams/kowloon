@@ -1,0 +1,96 @@
+services:
+  mongodb:
+    image: mongo:7.0.30
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USERNAME:-kowloon}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-kowloon_password}
+    volumes:
+      - qa_mongodb_data:/data/db
+    networks:
+      - qa_internal
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    volumes:
+      - qa_minio_data:/data
+    networks:
+      qa_internal: {}
+      edge:
+        aliases:
+          - qa-minio
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kowloon:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ../env/.env.qa
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DOMAIN: ${DOMAIN}
+      MONGO_URI: mongodb://${MONGO_USERNAME:-kowloon}:${MONGO_PASSWORD:-kowloon_password}@mongodb:27017/${MONGO_DATABASE:-kowloon_qa}?authSource=admin
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-kowloon-qa}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-minioadmin}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-minioadmin}
+      S3_PUBLIC_URL: ${S3_PUBLIC_URL}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      qa_internal: {}
+      edge:
+        aliases:
+          - qa-kowloon
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${EDGE_NETWORK:-kowloon-edge}"
+      - "traefik.http.services.kowloon-qa.loadbalancer.server.port=3000"
+      - "traefik.http.routers.kowloon-qa.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.kowloon-qa.entrypoints=websecure"
+      - "traefik.http.routers.kowloon-qa.tls=true"
+      - "traefik.http.routers.kowloon-qa.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-le}"
+      - "traefik.http.routers.kowloon-qa-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.kowloon-qa-http.entrypoints=web"
+      - "traefik.http.routers.kowloon-qa-http.middlewares=qa-redirect-https"
+      - "traefik.http.middlewares.qa-redirect-https.redirectscheme.scheme=https"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/__health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  qa_mongodb_data:
+    driver: local
+  qa_minio_data:
+    driver: local
+
+networks:
+  qa_internal:
+    driver: bridge
+  edge:
+    name: ${EDGE_NETWORK:-kowloon-edge}
+    external: true
