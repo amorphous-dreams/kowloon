@@ -88,6 +88,12 @@ web_modules/
 .wsl2/env/.env.dev
 .wsl2/env/.env.edge
 .wsl2/env/.env.qa
+.wsl2/env/.env.*.bak.*
+
+# Local ops artifacts (track templates only)
+.wsl2/ops/cron/*.cron
+.wsl2/ops/cron/*.local
+.wsl2/ops/cron/*.secret
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

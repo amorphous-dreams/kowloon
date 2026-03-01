@@ -6,6 +6,8 @@ Windows + WSL2 specific setup/runbook docs live in this directory.
 - [ENVIRONMENTS.md](ENVIRONMENTS.md)
 - [QA_OPERATOR_RUNBOOK.md](QA_OPERATOR_RUNBOOK.md)
 - [PROD_OPERATOR_RUNBOOK.md](PROD_OPERATOR_RUNBOOK.md)
+- [BRANCHING_STRATEGY.md](BRANCHING_STRATEGY.md)
+- [UPSTREAM_PR_CHECKLIST.md](UPSTREAM_PR_CHECKLIST.md)
 
 Runbook commands use:
 - `make -f .wsl2/Makefile <target>`

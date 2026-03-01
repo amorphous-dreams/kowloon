@@ -1,0 +1,8 @@
+# Example: nightly Production -> QA sync (template only)
+# Do not commit machine-specific cron files. Keep real schedules local.
+#
+# Run as a user with Docker access on the QA host.
+# Suggested local file name: .wsl2/ops/cron/qa-sync.cron.local
+#
+# minute hour day month day_of_week command
+15 2 * * * cd /home/joshu/kowloon && make -f .wsl2/Makefile sync-prod-to-qa >> /home/joshu/kowloon/logs/qa-sync.log 2>&1

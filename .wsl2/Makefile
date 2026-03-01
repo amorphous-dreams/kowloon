@@ -1,8 +1,9 @@
-.PHONY: help wsl2-init compare-main \
+.PHONY: help wsl2-init compare-main compare-upstream \
 	dev-up dev-up-preserve dev-down dev-logs dev-ps dev-smoke dev-reset \
 	edge-up edge-down edge-logs edge-ps \
 	qa-up qa-down qa-logs qa-ps qa-smoke qa-reset qa-bootstrap \
-	seed-qa-to-prod sync-prod-to-qa
+	seed-qa-to-prod sync-prod-to-qa \
+	branch-status feature-branch pr-hygiene
 
 WSL2_ROOT := .wsl2
 WSL2_ENV_DIR := $(WSL2_ROOT)/env
@@ -30,6 +31,29 @@ wsl2-init: ## Create local WSL2 env files from templates
 
 compare-main: ## Show full repo diff against upstream main
 	@git diff --name-status main -- .
+
+compare-upstream: ## Show diff against upstream/main (fallback: origin/main)
+	@BASE=upstream/main; \
+	if ! git rev-parse --verify --quiet $$BASE >/dev/null; then BASE=origin/main; fi; \
+	echo "Using base: $$BASE"; \
+	git diff --name-status $$BASE -- .
+
+branch-status: ## Show commit alignment for main/feature branches
+	@echo "Current branch: $$(git rev-parse --abbrev-ref HEAD)"; \
+	echo "HEAD: $$(git rev-parse --short HEAD)"; \
+	echo "main: $$(git rev-parse --short main)"; \
+	if git rev-parse --verify --quiet origin/main >/dev/null; then echo "origin/main: $$(git rev-parse --short origin/main)"; fi; \
+	if git rev-parse --verify --quiet upstream/main >/dev/null; then echo "upstream/main: $$(git rev-parse --short upstream/main)"; else echo "upstream/main: (not fetched)"; fi
+
+feature-branch: ## Create feature/<name> from upstream/main (fallback: origin/main). Use NAME=<name>
+	@test -n "$(NAME)" || (echo "Usage: make -f .wsl2/Makefile feature-branch NAME=<name>" && exit 1)
+	@BASE=upstream/main; \
+	if ! git rev-parse --verify --quiet $$BASE >/dev/null; then BASE=origin/main; fi; \
+	echo "Creating feature/$(NAME) from $$BASE"; \
+	git switch -c feature/$(NAME) $$BASE
+
+pr-hygiene: ## Run upstream PR hygiene checks for current branch
+	@.wsl2/scripts/pr-hygiene.sh
 
 # Dev commands
 dev-up: ## Start dev server (reset + bootstrap + app)
