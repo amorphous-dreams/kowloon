@@ -15,6 +15,7 @@ This repository is now intentionally split between:
 
 - Purpose: persistent local-infra/live-example environment for admin/operator validation.
 - Reachability: local intranet hostname (recommended: `kowloon.local`) via mDNS/local DNS/hosts.
+- Setup guide: [MDNS_AVAHI_SETUP.md](MDNS_AVAHI_SETUP.md).
 - TLS mode: intranet/local TLS is expected for `.local`; public ACME certificates are not expected for mDNS-only names.
 - Data policy: import Production backup artifacts into QA, then sanitize.
 - Command surface:

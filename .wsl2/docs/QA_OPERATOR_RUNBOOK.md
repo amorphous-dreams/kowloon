@@ -18,6 +18,7 @@ Set real values:
 mDNS note:
 - Prefer a flat `.local` hostname (for example `kowloon.local`) for Windows/WSL2 compatibility.
 - Avoid multi-label `.local` hostnames for mDNS-dependent setups.
+- Setup walkthrough: [MDNS_AVAHI_SETUP.md](MDNS_AVAHI_SETUP.md).
 
 ## 2) Enter QA mode on this host
 
