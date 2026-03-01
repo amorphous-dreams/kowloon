@@ -14,7 +14,7 @@ S3_ACCESS_KEY="$(env_get "$ENV_FILE" S3_ACCESS_KEY)"
 S3_SECRET_KEY="$(env_get "$ENV_FILE" S3_SECRET_KEY)"
 S3_PUBLIC_URL="$(env_get "$ENV_FILE" S3_PUBLIC_URL)"
 
-DOMAIN="${DOMAIN:-qa.example.com}"
+DOMAIN="${DOMAIN:-kowloon.local}"
 S3_BUCKET="${S3_BUCKET:-kowloon-qa}"
 
 echo "Checking QA container health..."

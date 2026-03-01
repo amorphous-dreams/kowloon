@@ -8,12 +8,16 @@ cp .wsl2/env/.env.qa.example .wsl2/env/.env.qa
 ```
 
 Set real values:
-- `DOMAIN` (public QA FQDN)
+- `DOMAIN` (recommended local intranet name: `kowloon.local`)
 - `JWT_SECRET`
 - Mongo and MinIO credentials
 - `TRAEFIK_API_INSECURE=true` in `.wsl2/env/.env.edge` (required by current `qa-smoke` dashboard check)
 - `PROD_MONGO_ARCHIVE` (path to latest production Mongo archive file)
 - `PROD_MINIO_ARCHIVE` (path to latest production MinIO volume archive file)
+
+mDNS note:
+- Prefer a flat `.local` hostname (for example `kowloon.local`) for Windows/WSL2 compatibility.
+- Avoid multi-label `.local` hostnames for mDNS-dependent setups.
 
 ## 2) Enter QA mode on this host
 
@@ -73,11 +77,11 @@ This will:
 - run QA post-sync sanitization
 - note: automated scheduling is out of scope for now (manual runbook step)
 
-## 7) Federation prerequisites checklist
+## 7) Reachability checklist
 
-- QA FQDN resolves publicly.
-- QA has valid HTTPS cert from edge Traefik.
-- Production can reach QA over HTTPS.
+- QA hostname resolves on your local network (mDNS or local DNS/hosts).
+- QA is reachable over HTTPS from intended QA clients.
+- If using intranet `.local`, expect self-signed/default TLS unless local cert trust is configured.
 
 ## 8) Troubleshooting
 
@@ -85,7 +89,7 @@ This will:
 - Ensure Docker daemon access is available from your shell and restart Docker.
 
 2. Host routing fails:
-- Verify `DOMAIN` in `.wsl2/env/.env.qa` matches DNS and Traefik router host rule.
+- Verify `DOMAIN` in `.wsl2/env/.env.qa` matches DNS/mDNS and Traefik router host rule.
 - Check `make -f .wsl2/Makefile edge-logs` and `make -f .wsl2/Makefile qa-logs`.
 
 3. MinIO permission errors:

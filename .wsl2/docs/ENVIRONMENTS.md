@@ -14,7 +14,8 @@ This repository is now intentionally split between:
 ## `qa`
 
 - Purpose: persistent local-infra/live-example environment for admin/operator validation.
-- Reachability: local intranet or public HTTPS FQDN (production federation proofing requires HTTPS reachability from production).
+- Reachability: local intranet hostname (recommended: `kowloon.local`) via mDNS/local DNS/hosts.
+- TLS mode: intranet/local TLS is expected for `.local`; public ACME certificates are not expected for mDNS-only names.
 - Data policy: import Production backup artifacts into QA, then sanitize.
 - Command surface:
   - `make -f .wsl2/Makefile qa-up`
