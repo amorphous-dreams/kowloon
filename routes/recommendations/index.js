@@ -47,8 +47,16 @@ function visibleToViewer(tier, isLocal) {
 
 function resolveImg(img, domain, protocol, restricted) {
   if (!img || typeof img !== "string") return null;
-  if (img.startsWith("file:"))
+  if (img.startsWith("file:")) {
+    // A remote file (id domain != local) lives on its origin server — this
+    // server can't serve it, so build the URL against the origin domain
+    // (public, unsigned). Local files stay here (signed if restricted). (#36)
+    const parsed = kowloonId(img);
+    if (parsed?.domain && !isLocalDomain(parsed.domain)) {
+      return buildFileUrl({ fileId: img, domain: parsed.domain, protocol, restricted: false });
+    }
     return buildFileUrl({ fileId: img, domain, protocol, restricted });
+  }
   return img; // already an http(s) URL
 }
 
