@@ -30,11 +30,13 @@ export default async function checkBlocked(activity) {
       ? await getObjectById(target.actorId)
       : null;
 
-    // Collect all potential "blocked" circle IDs
+    // Collect all potential "blocked" circle IDs. Only User docs have a
+    // circles.blocked path; optional chaining safely no-ops for non-User
+    // recipients/targets (Posts, Circles, etc.).
     const blockedCircleIds = [
-      to?.blocked,
-      target?.blocked,
-      targetActor?.blocked,
+      to?.circles?.blocked,
+      target?.circles?.blocked,
+      targetActor?.circles?.blocked,
     ].filter(Boolean);
 
     if (blockedCircleIds.length === 0) {

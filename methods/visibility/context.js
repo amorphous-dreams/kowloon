@@ -38,10 +38,10 @@ export async function getViewerContext(viewerId) {
     : [];
   const groupIds = new Set(groups.map((g) => g.id));
 
-  const viewer = await User.findOne({ id: viewerId }).select("blocked").lean();
+  const viewer = await User.findOne({ id: viewerId }).select("circles.blocked").lean();
   let blockedActorIds = new Set();
-  if (viewer?.blocked) {
-    const blockedCircle = await Circle.findOne({ id: viewer.blocked })
+  if (viewer?.circles?.blocked) {
+    const blockedCircle = await Circle.findOne({ id: viewer.circles.blocked })
       .select("members.id")
       .lean();
     blockedActorIds = new Set((blockedCircle?.members ?? []).map((m) => m.id));

@@ -16,7 +16,7 @@ export default async function (limit = 0, skip = 0) {
           (
             await Circle.find({
               id: {
-                $in: [to?.blocked, target?.blocked, actor?.blocked],
+                $in: [to?.circles?.blocked, target?.circles?.blocked, actor?.circles?.blocked],
               },
             })
           )

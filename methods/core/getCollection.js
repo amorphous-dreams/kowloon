@@ -97,7 +97,7 @@ export default async function getCollection(type, {
 
         const excludedUsers = [...new Set([...blockedUsers, ...mutedUsers])];
         if (excludedUsers.length > 0) {
-          finalQuery.attributedTo = { $nin: excludedUsers };
+          finalQuery.actorId = { $nin: excludedUsers };
         }
       }
     }
