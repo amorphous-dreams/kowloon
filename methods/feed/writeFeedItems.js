@@ -39,15 +39,17 @@ export default async function writeFeedItems(created, objectType) {
       return "audience";
     };
 
-    const normalizeCap = (val) => {
-      if (!val) return "public";
-      const v = String(val).toLowerCase().trim();
-      if (v === "@public" || v === "public") return "public";
-      if (v === "followers") return "followers";
-      if (v === "audience") return "audience";
-      if (v === "none") return "none";
-      return "public";
-    };
+    // canReply/canReact use the exact same to-shaped vocabulary as `to`
+    // itself (@public / @<domain> / circle:<id> / group:<id> / @<user>@
+    // <domain> for "only me") — confirmed against the actual composer UI,
+    // which only ever produces these four. Previously had its own
+    // normalizeCap() that defaulted any unrecognized (i.e. any real
+    // circle:/group:-scoped) value to "public" instead of "audience" like
+    // normalizeTo() — silently granting public reply/react access to
+    // anything meant to be restricted. There's no real difference between
+    // the two coarsening rules now, so just reuse normalizeTo directly.
+    // (This coarse cache is a display hint only — actual enforcement reads
+    // the raw value; see methods/feed/visibility.js authorizeInteraction.)
 
     const sanitizedObject = { ...created };
     delete sanitizedObject.to;
@@ -82,8 +84,8 @@ export default async function writeFeedItems(created, objectType) {
       group,
       object: sanitizedObject,
       to: normalizeTo(created.to),
-      canReply: normalizeCap(created.canReply),
-      canReact: normalizeCap(created.canReact),
+      canReply: normalizeTo(created.canReply),
+      canReact: normalizeTo(created.canReact),
       publishedAt: created.createdAt || created.publishedAt || new Date(),
       updatedAt: created.updatedAt,
     };

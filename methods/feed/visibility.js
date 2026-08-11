@@ -2,9 +2,13 @@
 // Visibility and capability evaluators for FeedItems items
 // Used by all GET endpoints to determine what viewers can see and do
 
-import { Circle, Group, FeedFanOut, FeedItems, User } from "#schema";
+import { Circle, Group, FeedFanOut, FeedItems, Post, Page, Bookmark, User } from "#schema";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 import logger from "#methods/utils/logger.js";
+import { getViewerContext } from "#methods/visibility/context.js";
+import { canInteract } from "#methods/visibility/helpers.js";
+
+const CAPABILITY_MODELS = { Post, Group, Bookmark, Page };
 
 /**
  * Check if a viewer has an explicit FeedFanOut grant for an item.
@@ -338,8 +342,30 @@ export async function authorizeInteraction({ actorId, targetId, capability }) {
   }
 
   if (capability) {
-    const enriched = await enrichWithCapabilities(feedCacheItem, actorId, { followerMap });
-    const allowed = capability === "canReply" ? enriched.canReply : enriched.canReact;
+    // Read the RAW canReply/canReact value from the source model, not the
+    // coarse FeedItems cache (enrichWithCapabilities/evaluateCapability) —
+    // fan-out (enqueueFanOut.js) computes its rows entirely from `to` and
+    // just stamps the raw canReply/canReact string onto every row verbatim,
+    // so it has no mechanism to resolve a DIFFERENT audience (e.g. a post
+    // public to everyone, but replies restricted to one circle). The cached
+    // value can't represent that; the source Post's own field can. canReply/
+    // canReact use the exact same to-shaped vocabulary as `to` itself
+    // (@public / @<domain> / circle:<id> / group:<id> / @<user>@<domain> for
+    // "only me") — evaluated the same way visibility is, via canInteract().
+    const Model = CAPABILITY_MODELS[feedCacheItem.objectType];
+    const raw = Model
+      ? await Model.findOne({ id: targetId }).select(`${capability} actorId to`).lean()
+      : null;
+    // Empty canReply/canReact (the default) inherits the post's OWN raw `to`
+    // — using raw.to here, not feedCacheItem.to, matters: FeedItems.to is
+    // ALSO coarsened to public/server/audience by writeFeedItems.js, and
+    // canInteract() needs the precise circle:/group:-prefixed value to
+    // resolve real membership. Falling back to the coarse cache here would
+    // incorrectly deny a circle's own members on any circle-scoped post with
+    // no explicit canReply override.
+    const capValue = raw?.[capability] || raw?.to;
+    const ctx = await getViewerContext(actorId);
+    const allowed = canInteract(capValue, feedCacheItem.actorId, ctx);
     if (!allowed) {
       const label = capability === "canReply" ? "Replies" : "Reactions";
       return deny(403, `${label} are disabled on this post.`, `${capability}_false`);

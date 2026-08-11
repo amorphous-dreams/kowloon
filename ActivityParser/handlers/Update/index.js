@@ -110,6 +110,11 @@ async function updateFeedItems(updated, objectType, patchFields) {
       object: sanitizedObject,
     };
 
+    // Shared by the to/canReply/canReact coarsening below — all three use
+    // the same to-shaped vocabulary and the same tier mapping.
+    const { domain } = getServerSettings();
+    const dom = String(domain || "").toLowerCase();
+
     if (patchFields.type !== undefined) cacheUpdate.type = updated.type;
 
     if (patchFields.to !== undefined) {
@@ -117,21 +122,32 @@ async function updateFeedItems(updated, objectType, patchFields) {
       // mapping in enqueueFanOut.js#parseAudience. The domain form (@<domain>) is
       // the server tier — missing it here mislabeled edited-to-community posts as
       // "audience", which the community feed excludes, so they vanished (#46).
-      const { domain } = getServerSettings();
-      const dom = String(domain || "").toLowerCase();
       const val = String(updated.to || "").toLowerCase().trim();
       cacheUpdate.to =
         val === "@public" || val === "public" ? "public"
         : val === "@server" || val === "server" || (dom && val === `@${dom}`) ? "server"
         : "audience";
     }
+    // canReply/canReact use the same to-shaped vocabulary as `to` — coarsen
+    // them the identical way (mirrors the `to` block above). Previously
+    // defaulted any unrecognized value (i.e. any real circle:/group:-scoped
+    // restriction) to "public" instead of "audience" — silently granting
+    // public reply/react access to anything meant to be restricted. This
+    // coarse cache is a display hint only; actual enforcement reads the raw
+    // value (methods/feed/visibility.js authorizeInteraction).
     if (patchFields.canReply !== undefined) {
       const val = String(updated.canReply || "").toLowerCase().trim();
-      cacheUpdate.canReply = ["public", "followers", "audience", "none"].includes(val) ? val : "public";
+      cacheUpdate.canReply =
+        val === "@public" || val === "public" ? "public"
+        : val === "@server" || val === "server" || (dom && val === `@${dom}`) ? "server"
+        : "audience";
     }
     if (patchFields.canReact !== undefined) {
       const val = String(updated.canReact || "").toLowerCase().trim();
-      cacheUpdate.canReact = ["public", "followers", "audience", "none"].includes(val) ? val : "public";
+      cacheUpdate.canReact =
+        val === "@public" || val === "public" ? "public"
+        : val === "@server" || val === "server" || (dom && val === `@${dom}`) ? "server"
+        : "audience";
     }
 
     await FeedItems.findOneAndUpdate({ id: updated.id }, { $set: cacheUpdate });
