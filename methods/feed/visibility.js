@@ -2,7 +2,7 @@
 // Visibility and capability evaluators for FeedItems items
 // Used by all GET endpoints to determine what viewers can see and do
 
-import { Circle, Group, FeedFanOut, User } from "#schema";
+import { Circle, Group, FeedFanOut, FeedItems, User } from "#schema";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 import logger from "#methods/utils/logger.js";
 
