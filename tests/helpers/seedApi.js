@@ -19,11 +19,15 @@ export async function seedAdminAndLogin() {
   }
 
   if (!loginOk) {
-    // Create user via Activity (your ActivityParser should create the user)
+    // Create user via Activity (your ActivityParser should create the user).
+    // objectType/object.type must be "User" — "Person" isn't in the activity
+    // schema's allowed-values enum, and object.type is required by an
+    // if/then schema rule specific to Create->User.
     await client.postOutbox({
       type: "Create",
-      objectType: "Person",
+      objectType: "User",
       object: {
+        type: "User",
         username,
         password,
         profile: { name: "Admin" },
@@ -42,8 +46,8 @@ export async function createUser(
 ) {
   const { status, json } = await client.postOutbox({
     type: "Create",
-    objectType: "Person",
-    object: { username, password, profile: { name } },
+    objectType: "User",
+    object: { type: "User", username, password, profile: { name } },
     to: "@kwln.org",
   });
   if (status !== 200 && status !== 201)

@@ -39,9 +39,12 @@ export class TestClient {
   }
 
   postOutbox(activity) {
-    return this.request("/outbox/post", { method: "POST", body: activity });
+    // Both routers mount their POST handler at "/" (routes/outbox/index.js,
+    // routes/inbox/index.js) — "/outbox/post"/"/inbox/post" 404'd, which was
+    // silently failing every integration test that seeds users this way.
+    return this.request("/outbox", { method: "POST", body: activity });
   }
   postInbox(activity) {
-    return this.request("/inbox/post", { method: "POST", body: activity });
+    return this.request("/inbox", { method: "POST", body: activity });
   }
 }
