@@ -18,6 +18,7 @@ import notifyMentions from "#methods/mentions/notify.js";
 import kowloonId from "#methods/parse/kowloonId.js";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 import getMultiFederationTargets from "../utils/getMultiFederationTargets.js";
+import { authorizeInteraction } from "#methods/feed/visibility.js";
 
 /**
  * Validate Reply activity
@@ -110,7 +111,23 @@ export default async function Reply(activity, ctx = {}) {
       parentId = parentIsTopLevel ? repliedToId : parentReply.parent;
     }
 
-    // 1c. Content-based dedup — same actor, same content, same immediate parent
+    // 1c. Authorize — visibility, block, and canReply all gate against the
+    // ROOT post, matching this codebase's existing rule that a Reply's
+    // effective visibility is inherited from the root object, not the
+    // immediate parent (see the class doc comment above: Reply.to/canReply/
+    // canReact are always blank; the parent is the source of truth). Does
+    // NOT separately check the immediate parent reply's author's block list
+    // if it differs from the root author's — see kowloon-network/kowloon#40.
+    const authz = await authorizeInteraction({
+      actorId,
+      targetId: rootId,
+      capability: "canReply",
+    });
+    if (!authz.ok) {
+      return { activity, error: authz.message, status: authz.status };
+    }
+
+    // 1d. Content-based dedup — same actor, same content, same immediate parent
     // within the window is a duplicate. Returns the existing reply rather than
     // creating a new one. Prevents spam-clicking the submit button (network-retry
     // idempotency is handled separately via `dedupeKey`).

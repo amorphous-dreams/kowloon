@@ -142,7 +142,13 @@ export default route(
     }
 
     if (!created || created.error) {
-      setStatus(400);
+      // Handlers can signal a specific status via result.status (e.g. the
+      // Reply/React authorization gate returns 404 for visibility/block
+      // denials, 403 for a disabled canReply/canReact) — methods/activities/
+      // create.js passes the handler's full return through as `result`.
+      // Every other handler's plain-string error has no result.status, so
+      // this falls back to 400 exactly as before — no behavior change there.
+      setStatus(created?.result?.status || 400);
       set("error", created?.error || "Failed to create activity");
       if (DEV)
         console.error(

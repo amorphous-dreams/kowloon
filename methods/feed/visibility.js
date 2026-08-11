@@ -2,8 +2,9 @@
 // Visibility and capability evaluators for FeedItems items
 // Used by all GET endpoints to determine what viewers can see and do
 
-import { Circle, Group, FeedFanOut } from "#schema";
+import { Circle, Group, FeedFanOut, User } from "#schema";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
+import logger from "#methods/utils/logger.js";
 
 /**
  * Check if a viewer has an explicit FeedFanOut grant for an item.
@@ -272,6 +273,83 @@ export async function enrichWithCapabilities(feedCacheItem, viewerId, context = 
 }
 
 /**
+ * Authorize an interaction (Reply/React) against an existing FeedItems
+ * target. This is the single gate for ALL rejection reasons — target
+ * missing, not visible to the actor, actor is blocked by the target's
+ * author, or the relevant capability (canReply/canReact) is off.
+ *
+ * All but the capability case return an IDENTICAL generic 404: a requester
+ * can't distinguish "blocked" from "not addressed to you" from "doesn't
+ * exist". This is deliberate — Kowloon's relationship model is built on
+ * ambiguity (circle membership is private, nobody gets an "unfollowed"
+ * signal), and a distinguishing error for "you're blocked" would itself be a
+ * disclosure the moment someone blocks you. The capability-disabled case is
+ * NOT sensitive (the actor can already see the post; the author just turned
+ * off replies/reactions) so it gets a real 403 + message, like X's "replies
+ * are limited" state.
+ *
+ * The real reason is always logged server-side (structured, at info level)
+ * so debugging "why didn't this go through" is never actually blind — the
+ * ambiguity is purely client-facing.
+ *
+ * See kowloon-network/kowloon#40.
+ *
+ * @param {Object} opts
+ * @param {string} opts.actorId - the user attempting to interact
+ * @param {string} opts.targetId - the FeedItems id being replied to / reacted to
+ * @param {"canReply"|"canReact"} [opts.capability] - omit to only check visibility+block
+ * @returns {Promise<{ok:true}|{ok:false,status:number,message:string,reason:string}>}
+ */
+export async function authorizeInteraction({ actorId, targetId, capability }) {
+  function deny(status, message, reason) {
+    logger.info("Interaction denied", {
+      reason,
+      actorId,
+      targetId,
+      capability: capability || null,
+    });
+    return { ok: false, status, message, reason };
+  }
+
+  const feedCacheItem = await FeedItems.findOne({
+    id: targetId,
+    deletedAt: null,
+    tombstoned: { $ne: true },
+  }).lean();
+  if (!feedCacheItem) return deny(404, "Not found", "not_found");
+
+  const followerMap = await buildFollowerMap([feedCacheItem.actorId]);
+  const visible = await canView(feedCacheItem, actorId, { followerMap });
+  if (!visible) return deny(404, "Not found", "not_visible");
+
+  // Block: the target's author has blocked this actor. Skip when the actor
+  // IS the author (can't block yourself out of your own content).
+  if (feedCacheItem.actorId && feedCacheItem.actorId !== actorId) {
+    const author = await User.findOne({ id: feedCacheItem.actorId })
+      .select("circles.blocked")
+      .lean();
+    if (author?.circles?.blocked) {
+      const blockedCircle = await Circle.findOne({ id: author.circles.blocked })
+        .select("members.id")
+        .lean();
+      const blockedIds = new Set((blockedCircle?.members ?? []).map((m) => m.id));
+      if (blockedIds.has(actorId)) return deny(404, "Not found", "blocked");
+    }
+  }
+
+  if (capability) {
+    const enriched = await enrichWithCapabilities(feedCacheItem, actorId, { followerMap });
+    const allowed = capability === "canReply" ? enriched.canReply : enriched.canReact;
+    if (!allowed) {
+      const label = capability === "canReply" ? "Replies" : "Reactions";
+      return deny(403, `${label} are disabled on this post.`, `${capability}_false`);
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
  * Build visibility filter for FeedItems queries
  * @param {string|null} viewerId - Viewer's ID (null = anonymous)
  * @returns {Object} - MongoDB filter
@@ -314,5 +392,6 @@ export default {
   inLocalAudience,
   evaluateCapability,
   enrichWithCapabilities,
+  authorizeInteraction,
   buildVisibilityFilter,
 };

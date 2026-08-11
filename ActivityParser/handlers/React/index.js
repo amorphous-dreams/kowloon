@@ -29,6 +29,7 @@ import createNotification from "#methods/notifications/create.js";
 import kowloonId from "#methods/parse/kowloonId.js";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 import getMultiFederationTargets from "../utils/getMultiFederationTargets.js";
+import { authorizeInteraction } from "#methods/feed/visibility.js";
 
 const TARGET_MODELS = [Post, Reply, Page, Bookmark, Group, Circle];
 
@@ -145,6 +146,34 @@ export default async function React(activity, ctx = {}) {
     const reactName = activity.object?.name || undefined;
     // Empty / omitted emoji means "remove my reaction".
     const clearing = typeof reactKind !== "string" || reactKind.trim() === "";
+
+    // Authorize new/changed reactions only — removing your own past reaction
+    // is never gated (e.g. you reacted, then got blocked afterward; you can
+    // still clean up your own data). Full FeedItems-backed check when the
+    // target is a Post, or a Reply (authorized against ITS root post, same
+    // rule Reply/index.js uses — a Reply's effective visibility is inherited
+    // from the root). Page/Bookmark/Group/Circle react targets aren't
+    // FeedItems-backed and don't yet go through this gate — unchanged from
+    // prior behavior, tracked as follow-up in kowloon-network/kowloon#40.
+    if (!clearing) {
+      const isPostTarget = typeof targetId === "string" && targetId.startsWith("post:");
+      const isReplyTarget = typeof targetId === "string" && targetId.startsWith("reply:");
+      if (isPostTarget || isReplyTarget) {
+        let authTargetId = targetId;
+        if (isReplyTarget) {
+          const parentReply = await Reply.findOne({ id: targetId }).select("target").lean();
+          if (parentReply) authTargetId = parentReply.target;
+        }
+        const authz = await authorizeInteraction({
+          actorId,
+          targetId: authTargetId,
+          capability: "canReact",
+        });
+        if (!authz.ok) {
+          return { activity, error: authz.message, status: authz.status };
+        }
+      }
+    }
 
     // This user's current reaction(s) on this target. The old model allowed
     // more than one; collapse to a single reaction on any write.
