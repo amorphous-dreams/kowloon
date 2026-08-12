@@ -5,7 +5,7 @@
 import { Circle, Group, FeedFanOut, FeedItems, Post, Page, Bookmark, User } from "#schema";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
 import logger from "#methods/utils/logger.js";
-import { getViewerContext } from "#methods/visibility/context.js";
+import { getViewerContext, getExclusionSets, domainOf } from "#methods/visibility/context.js";
 import { canInteract } from "#methods/visibility/helpers.js";
 
 const CAPABILITY_MODELS = { Post, Group, Bookmark, Page };
@@ -326,19 +326,16 @@ export async function authorizeInteraction({ actorId, targetId, capability }) {
   const visible = await canView(feedCacheItem, actorId, { followerMap });
   if (!visible) return deny(404, "Not found", "not_visible");
 
-  // Block: the target's author has blocked this actor. Skip when the actor
-  // IS the author (can't block yourself out of your own content).
+  // Block: the target's author has blocked this actor — individually, or by
+  // banning this actor's whole server. Skip when the actor IS the author
+  // (can't block yourself out of your own content). Mute is deliberately
+  // excluded here — mute only soft-hides on the read side, it never rejects
+  // an interaction (see getExclusionSets).
   if (feedCacheItem.actorId && feedCacheItem.actorId !== actorId) {
-    const author = await User.findOne({ id: feedCacheItem.actorId })
-      .select("circles.blocked")
-      .lean();
-    if (author?.circles?.blocked) {
-      const blockedCircle = await Circle.findOne({ id: author.circles.blocked })
-        .select("members.id")
-        .lean();
-      const blockedIds = new Set((blockedCircle?.members ?? []).map((m) => m.id));
-      if (blockedIds.has(actorId)) return deny(404, "Not found", "blocked");
-    }
+    const { blockedActorIds, blockedDomains } = await getExclusionSets(feedCacheItem.actorId);
+    const actorDomain = domainOf(actorId)?.toLowerCase();
+    const isBlocked = blockedActorIds.has(actorId) || (actorDomain && blockedDomains.has(actorDomain));
+    if (isBlocked) return deny(404, "Not found", "blocked");
   }
 
   if (capability) {

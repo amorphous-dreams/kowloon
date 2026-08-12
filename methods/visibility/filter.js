@@ -1,4 +1,5 @@
 import { escapeRegExp } from "./utils.js";
+import { applyActorExclusion, domainExclusionRegex } from "./context.js";
 
 export function buildVisibilityQuery(ctx) {
   const base = { deletedAt: null };
@@ -31,10 +32,13 @@ export function buildVisibilityQuery(ctx) {
 
   const filter = { ...base, $or: or };
 
-  if (ctx.blockedActorIds.size) {
-    filter.actorId = {
-      $nin: [...ctx.blockedActorIds].filter((a) => a !== ctx.viewerId),
-    };
-  }
+  // Hide anything from a blocked or muted actor OR whole server (mute is
+  // soft-hide-only, but it shares the same "keep this out of my view"
+  // semantics as block's read-side effect here).
+  const ids = new Set([...ctx.blockedActorIds, ...(ctx.mutedActorIds ?? [])]);
+  ids.delete(ctx.viewerId);
+  const domainRegex = domainExclusionRegex(new Set([...ctx.blockedDomains ?? [], ...(ctx.mutedDomains ?? [])]));
+  applyActorExclusion(filter, { ids, domainRegex });
+
   return filter;
 }

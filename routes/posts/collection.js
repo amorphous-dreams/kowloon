@@ -17,6 +17,7 @@ import isLocalDomain from "#methods/parse/isLocalDomain.js";
 import kowloonId from "#methods/parse/kowloonId.js";
 import { buildFileUrl, isPublicVisibility } from "#methods/files/signedUrl.js";
 import { fileIdFromValue } from "#methods/files/fileRef.js";
+import { excludeBlockedMuted } from "#methods/visibility/context.js";
 
 export default route(async ({ req, query, user, set, setStatus }) => {
   // Determine visibility tiers for this viewer
@@ -66,6 +67,9 @@ export default route(async ({ req, query, user, set, setStatus }) => {
     const localDomain = getSetting("domain");
     if (localDomain) filter.originDomain = { $in: [localDomain, null] };
   }
+
+  // Hide posts from anyone (or any whole server) the viewer has blocked/muted.
+  await excludeBlockedMuted(filter, user?.id);
 
   const page  = Math.max(1, parseInt(query.page,  10) || 1);
   const limit = Math.min(Math.max(1, parseInt(query.limit, 10) || 20), 100);

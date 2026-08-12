@@ -4,6 +4,7 @@
 import { FeedItems, FeedFanOut, Circle, User } from "#schema";
 import logger from "#methods/utils/logger.js";
 import { getServerSettings } from "#methods/settings/schemaHelpers.js";
+import { getExclusionSets, domainExclusionRegex } from "#methods/visibility/context.js";
 
 function extractDomain(str) {
   if (!str) return null;
@@ -14,29 +15,6 @@ function extractDomain(str) {
     const parts = str.split("@").filter(Boolean);
     return parts[parts.length - 1];
   }
-}
-
-async function getBlockedMutedUsers(viewerId) {
-  const user = await User.findOne({ id: viewerId }).select("circles").lean();
-  if (!user) return [];
-
-  const blockedMutedIds = new Set();
-
-  if (user.circles?.blocked) {
-    const blockedCircle = await Circle.findOne({ id: user.circles.blocked }).select("members").lean();
-    if (blockedCircle?.members) {
-      blockedCircle.members.forEach((m) => blockedMutedIds.add(m.id));
-    }
-  }
-
-  if (user.circles?.muted) {
-    const mutedCircle = await Circle.findOne({ id: user.circles.muted }).select("members").lean();
-    if (mutedCircle?.members) {
-      mutedCircle.members.forEach((m) => blockedMutedIds.add(m.id));
-    }
-  }
-
-  return Array.from(blockedMutedIds);
 }
 
 async function getUserGroups(viewerId) {
@@ -214,7 +192,10 @@ export default async function getTimeline({
   }
 
   // 5. Get blocked/muted users
-  const blockedMutedUsers = await getBlockedMutedUsers(viewerId);
+  const { blockedActorIds, blockedDomains, mutedActorIds, mutedDomains } = await getExclusionSets(viewerId);
+  const excludedIds = new Set([...blockedActorIds, ...mutedActorIds]);
+  excludedIds.delete(viewerId);
+  const excludedDomainRegex = domainExclusionRegex(new Set([...blockedDomains, ...mutedDomains]));
 
   // Bare server entries in this circle (e.g. "@kwln2.local") are public-firehose
   // subscriptions. Their FanOut rows are created per-subscriber by pullFromRemote
@@ -241,23 +222,24 @@ export default async function getTimeline({
     (id) => !(typeof id === "string" && id.startsWith("@") && !id.slice(1).includes("@"))
   );
 
-  const userActorFilter = blockedMutedUsers.length > 0
-    ? { $in: nonServerMembers, $nin: blockedMutedUsers }
-    : { $in: nonServerMembers };
+  // actorId exclusion (blocked/muted individuals + whole servers) can't safely
+  // share one field-operator object with the $in/$regex inclusion above, so
+  // each branch is composed as an $and of independent field clauses.
+  const userActorConds = [{ actorId: { $in: nonServerMembers } }, { to: toFilter }];
+  if (excludedIds.size) userActorConds.push({ actorId: { $nin: [...excludedIds] } });
+  if (excludedDomainRegex) userActorConds.push({ actorId: { $not: excludedDomainRegex } });
 
-  const fanOutOrConditions = [
-    { actorId: userActorFilter, to: toFilter },
-  ];
+  const fanOutOrConditions = [{ $and: userActorConds }];
 
   if (serverMemberDomains.length > 0) {
     const escaped = serverMemberDomains.map((d) => d.replace(/[.\\+*?^${}()|[\]]/g, "\\$&"));
     const regexStr = `@[^@]+@(${escaped.join("|")})$`;
     // Server-domain FanOut rows always have to=specificUserId (created by pullFromRemote),
     // so viewerId in the toFilter covers them.
-    const serverActorFilter = blockedMutedUsers.length > 0
-      ? { $regex: regexStr, $nin: blockedMutedUsers }
-      : { $regex: regexStr };
-    fanOutOrConditions.push({ actorId: serverActorFilter, to: toFilter });
+    const serverActorConds = [{ actorId: { $regex: regexStr } }, { to: toFilter }];
+    if (excludedIds.size) serverActorConds.push({ actorId: { $nin: [...excludedIds] } });
+    if (excludedDomainRegex) serverActorConds.push({ actorId: { $not: excludedDomainRegex } });
+    fanOutOrConditions.push({ $and: serverActorConds });
   }
 
   if (localGroups.length > 0) {

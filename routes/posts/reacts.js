@@ -3,12 +3,17 @@
 
 import makeCollection from "../utils/makeCollection.js";
 import { React } from "#schema";
+import { excludeBlockedMuted } from "#methods/visibility/context.js";
 
 export default makeCollection({
   model: React,
-  buildQuery: (req) => ({
-    target: decodeURIComponent(req.params.id),
-    deletedAt: null,
-  }),
+  buildQuery: async (req, { user }) => {
+    const filter = {
+      target: decodeURIComponent(req.params.id),
+      deletedAt: null,
+    };
+    await excludeBlockedMuted(filter, user?.id);
+    return filter;
+  },
   sort: { createdAt: -1 },
 });

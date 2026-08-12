@@ -319,7 +319,15 @@ export default async function Add(activity) {
 
     // Immediately pull recent content for newly added remote entities in
     // user-owned circles. Fire-and-forget — the worker handles retries.
+    // Skip entirely for Blocked/Muted: pulling content from a server you're
+    // trying to keep out is pointless (and for Blocked, actively wrong).
+    let isSuppressedCircle = false;
     if (ownerType === "User" && remoteMembers.length > 0) {
+      const owner = await User.findOne({ id: ownerId }).select("circles.blocked circles.muted").lean();
+      isSuppressedCircle =
+        activity.target === owner?.circles?.blocked || activity.target === owner?.circles?.muted;
+    }
+    if (ownerType === "User" && remoteMembers.length > 0 && !isSuppressedCircle) {
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       for (const member of remoteMembers) {
         const isServer = /^@[^@]+$/.test(member.id);

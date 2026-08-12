@@ -12,12 +12,13 @@ import { Reply } from "#schema";
 import { activityStreamsCollection } from "../utils/oc.js";
 import { getSetting } from "#methods/settings/cache.js";
 import kowloonId from "#methods/parse/kowloonId.js";
+import { excludeBlockedMuted } from "#methods/visibility/context.js";
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
 async function serveLocal(ctx) {
-  const { req, query, set } = ctx;
+  const { req, query, user, set } = ctx;
   const postId = decodeURIComponent(req.params.id);
   const page = Math.max(1, parseInt(query.page, 10) || 1);
   const limit = Math.min(
@@ -27,6 +28,7 @@ async function serveLocal(ctx) {
   const skip = (page - 1) * limit;
 
   const filter = { target: postId, deletedAt: null };
+  await excludeBlockedMuted(filter, user?.id);
 
   const [docs, total] = await Promise.all([
     Reply.find(filter).sort({ createdAt: 1 }).skip(skip).limit(limit).lean(),
