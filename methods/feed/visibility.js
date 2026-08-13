@@ -362,7 +362,19 @@ export async function authorizeInteraction({ actorId, targetId, capability }) {
     // no explicit canReply override.
     const capValue = raw?.[capability] || raw?.to;
     const ctx = await getViewerContext(actorId);
-    const allowed = canInteract(capValue, feedCacheItem.actorId, ctx);
+    // Remote posts (pulled via federation) never get a row in the local Post
+    // collection — FeedItems.object is explicitly sanitized to drop to/
+    // canReply/canReact (see schema/FeedItems.js), and the top-level
+    // FeedItems.canReply/.canReact are the COARSE public/server/audience
+    // tier, not the precise circle:/group:-scoped vocabulary canInteract()
+    // needs — the same reason raw.to is used over the cache for local posts
+    // above. So `raw` is always null for a remote post, `capValue` always
+    // undefined, and canInteract(undefined, ...) always denies — every
+    // remote-post react/reply was being rejected regardless of the actual
+    // setting. We already know the actor can SEE this post (canView() passed
+    // above); with no real capability data to check, default to allowing
+    // rather than falsely denying.
+    const allowed = raw ? canInteract(capValue, feedCacheItem.actorId, ctx) : true;
     if (!allowed) {
       const label = capability === "canReply" ? "Replies" : "Reactions";
       return deny(403, `${label} are disabled on this post.`, `${capability}_false`);
