@@ -8,12 +8,29 @@
 //   4 -> quadrants   5 -> six wedges w/ a solid-black empty slot   6 -> six wedges
 // Each segment is filled from the TOP-CENTRE of its own avatar (the head), so a
 // low segment still shows a face, not a body.
+//
+// The wedge geometry is still hexagon-shaped internally (that's the seamless
+// pie-division look), but the FINAL image is a plain edge-to-edge square, not
+// hex-clipped — see the R comment below for why.
 
 import sharp from "sharp";
 
 const S = 512; // master icon size (px)
 const C = [S / 2, S / 2];
-const R = 250; // centre -> vertex
+// R is large enough that the hexagon fully CIRCUMSCRIBES the S×S square —
+// every slot polygon's fill therefore already reaches the full canvas, so
+// the icon comes out as a plain full-bleed square with no transparent hex
+// clip. Min R for that: a square corner sits half-diagonal = S/√2 from
+// centre, at 15° off the nearest hex vertex (vertices are 60° apart); the
+// hexagon's boundary at δ° off a vertex is (R·cos30°)/cos(δ) from centre, so
+// solving (R·cos30°)/cos15° ≥ S/√2 gives R ≥ (S/√2)·cos15°/cos30° ≈ 403.8.
+// Verified empirically too (rendered n=1..6, checked corner alpha == 255).
+// The client applies its OWN hex mask uniformly to every circle/group icon
+// (custom-uploaded or generated) — clipping to a hexagon here too meant a
+// generated icon got hex-masked twice, and the server's hexagon orientation
+// doesn't match the client's (rotated 90°), so the two clips' intersection
+// rendered as a garbled ~10-sided shape instead of a clean hexagon.
+const R = 410; // centre -> vertex — circumscribes the square, see above
 const MISSING_FILL = { r: 201, g: 201, b: 207 }; // neutral grey for avatar-less members
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -116,16 +133,13 @@ export default async function generateCircleIcon(avatars) {
     }
   }
 
-  const composed = await sharp({
+  // No final hex clip: R (above) already makes every slot's fill reach the
+  // full S×S canvas, so this is already a plain edge-to-edge square — the
+  // client's own hex mask is the one place the hexagon shape gets applied.
+  return sharp({
     create: { width: S, height: S, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
   })
     .composite(layers)
-    .png()
-    .toBuffer();
-
-  // Trim anything outside the hexagon for a clean anti-aliased edge.
-  return sharp(composed)
-    .composite([{ input: polySvg(HEX, "#fff"), blend: "dest-in" }])
     .png()
     .toBuffer();
 }
