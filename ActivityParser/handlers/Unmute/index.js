@@ -24,11 +24,19 @@ export default async function Unmute(activity) {
       return { activity, error: "Unmute: muted circle not configured" };
     }
 
-    // --- normalize target to a member (accepts @user@domain or DB id) ---
+    // --- normalize target to a member (accepts @user@domain, bare @domain
+    // server entries, or DB id) ---
     async function resolveTargetToMember(ref) {
       const isActorId = (s) => /^@[^@]+@[^@]+$/.test(s);
+      const isServerId = (s) => /^@[^@]+$/.test(s);
       if (typeof ref === "string") {
         const s = ref.trim();
+        // Bare server entry ("@domain") — the member id IS the literal
+        // string, same as Add's resolveActorToMember. No lookup needed for
+        // removal (Circle.$pull below only matches on member.id); routing
+        // this through getObjectById would incorrectly resolve to OUR OWN
+        // server actor for any single-@ id, not the domain being unmuted.
+        if (isServerId(s)) return { id: s };
         if (isActorId(s)) {
           const u = await User.findOne({ id: s }).lean();
           // if the user isn't local, still build a minimal member from actorId

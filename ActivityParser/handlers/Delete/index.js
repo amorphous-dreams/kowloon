@@ -143,6 +143,15 @@ async function deleteOne(activity, targetId) {
     return { id: targetId, error: `target not found` };
   }
 
+  // System circles (Following, All Following, Groups, Blocked, Muted) are
+  // load-bearing pointers on the User doc (user.circles.*) — other code
+  // dereferences them assuming they resolve. Deletion is never a valid
+  // "reset"; membership can always be cleared instead. No owner/admin
+  // exception — this isn't a permission, it's a structural invariant.
+  if (parsed.type === "Circle" && current.type === "System") {
+    return { id: targetId, error: "System circles cannot be deleted" };
+  }
+
   const ownerActorId = parsed.type === "User" ? current.id : current.actorId;
   const isOwner = activity.actorId === ownerActorId;
   const isAdmin = await isServerAdmin(activity.actorId);

@@ -276,6 +276,29 @@ export default async function Update(activity) {
     // 4. Strip disallowed fields from the patch
     const patch = filterPatch(parsed.type, activity.object);
 
+    if (parsed.type === "Circle") {
+      // System circles (Following, All Following, Groups, Blocked, Muted) are
+      // load-bearing pointers on the User doc — name/summary/icon are fixed
+      // identity, not user-editable. Membership (via Add/Remove) and
+      // visibility stay fully editable.
+      if (current.type === "System") {
+        delete patch.name;
+        delete patch.summary;
+        delete patch.icon;
+      }
+      // canReply/canReact aren't independently meaningful for a Circle today
+      // (kept on the schema for a possible future circle-comments feature) —
+      // they always mirror `to`. If this patch isn't touching `to`, drop any
+      // canReply/canReact the client sent rather than let them diverge.
+      if ("to" in patch) {
+        patch.canReply = patch.to;
+        patch.canReact = patch.to;
+      } else {
+        delete patch.canReply;
+        delete patch.canReact;
+      }
+    }
+
     // For nested object patches like User.profile, expand to dot-notation so
     // a partial patch (e.g. `{ profile: { name: 'New' } }`) doesn't replace
     // the entire embedded document and wipe sibling fields like icon/urls.

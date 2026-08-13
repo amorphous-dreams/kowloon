@@ -354,6 +354,14 @@ export default async function Create(activity) {
       activity.object.to = norm.to;
       if (norm.canReply !== undefined) activity.object.canReply = norm.canReply;
       if (norm.canReact !== undefined) activity.object.canReact = norm.canReact;
+
+      // Circles: canReply/canReact aren't independently meaningful yet (kept
+      // on the schema for a possible future circle-comments feature) — force
+      // them to mirror `to` regardless of what was sent, same as Update.
+      if (type === "Circle") {
+        activity.object.canReply = activity.object.to;
+        activity.object.canReact = activity.object.to;
+      }
     }
 
     // Normalize location to GeoPoint format
