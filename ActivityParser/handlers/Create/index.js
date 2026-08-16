@@ -437,6 +437,30 @@ export default async function Create(activity) {
       activity.object.id = activity.objectId;
     }
 
+    // Link posts sharing another Kowloon post (issue #44): credit the
+    // ORIGINAL author. Resolved server-side from FeedItems — the universal
+    // read-cache for anything the sharer could have viewed, local or remote
+    // (the local Post collection only has rows for local content) — rather
+    // than trusted from the client. targetActor asserts a fact about a THIRD
+    // PARTY, unlike Post.actor's client-trusted self-embed, so it must never
+    // be client-suppliable. Best-effort: a target that no longer resolves
+    // (deleted, never cached) just creates the Link post without a credit.
+    if (type === "Post" && activity.object.type === "Link") {
+      delete activity.object.targetActor;
+      if (activity.object.target) {
+        try {
+          const targetItem = await FeedItems.findOne({ id: activity.object.target })
+            .select("object")
+            .lean();
+          if (targetItem?.object?.actor) {
+            activity.object.targetActor = targetItem.object.actor;
+          }
+        } catch {
+          // non-fatal — see comment above
+        }
+      }
+    }
+
     // If object.actorId is missing, many models will tolerate it, but your
     // outbox added a fallback already. We leave it as-is here.
     let created;

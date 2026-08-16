@@ -151,6 +151,11 @@ const PostSchema = new Schema(
       rsvp: { type: String },
     },
     target: { type: String, default: undefined }, // For Links
+    // Original author of a shared Kowloon post (target), captured at share
+    // time — server-resolved only, never client-suppliable (see Create
+    // handler). Deliberately a sibling field, not nested into target, to
+    // mirror the actorId/actor pattern used everywhere else in this schema.
+    targetActor: { type: ActorSchema, default: undefined },
     to: { type: String, default: "" },
     canReply: { type: String, default: "" },
     canReact: { type: String, default: "" },

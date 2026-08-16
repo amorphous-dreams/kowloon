@@ -299,6 +299,25 @@ export default async function Update(activity) {
       }
     }
 
+    if (parsed.type === "Post" && "target" in patch) {
+      // Keep targetActor in sync whenever target changes — same server-side-
+      // only resolution as Create (issue #44). targetActor itself is already
+      // stripped by filterPatch (not in ALLOWED_FIELDS.Post), so there's
+      // nothing to trust/distrust from the client here, just recompute.
+      // null (not undefined) so a cleared target actually unsets it via
+      // $set — undefined keys get silently dropped before reaching Mongo.
+      if (patch.target) {
+        try {
+          const targetItem = await FeedItems.findOne({ id: patch.target }).select("object").lean();
+          patch.targetActor = targetItem?.object?.actor ?? null;
+        } catch {
+          patch.targetActor = null;
+        }
+      } else {
+        patch.targetActor = null;
+      }
+    }
+
     // For nested object patches like User.profile, expand to dot-notation so
     // a partial patch (e.g. `{ profile: { name: 'New' } }`) doesn't replace
     // the entire embedded document and wipe sibling fields like icon/urls.
