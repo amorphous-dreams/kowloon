@@ -110,6 +110,41 @@ router.post(
   )
 );
 
+// PATCH /admin/posts/:id — update a server-owned post
+router.patch(
+  "/:id",
+  route(
+    async ({ params, body, set, setStatus }) => {
+      const post = await Post.findOne({
+        id: decodeURIComponent(params.id),
+        deletedAt: null,
+      });
+
+      if (!post) {
+        setStatus(404);
+        set("error", "Post not found");
+        return;
+      }
+
+      if (post.actorId !== getServerActorId()) {
+        setStatus(403);
+        set("error", "Only server-owned posts can be edited via this endpoint");
+        return;
+      }
+
+      const fields = pick(body, ALLOWED_FIELDS);
+      Object.assign(post, fields);
+      await post.save();
+
+      await writeFeedItems(post.toObject(), "Post");
+
+      set("ok", true);
+      set("post", sanitize(post.toObject()));
+    },
+    { allowUnauth: false }
+  )
+);
+
 // DELETE /admin/posts/:id — soft-delete (default) or hard-delete (?fullDelete=true)
 router.delete(
   "/:id",
