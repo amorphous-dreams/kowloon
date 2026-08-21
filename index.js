@@ -163,17 +163,11 @@ if (existsSync(join(publicDir, "index.html")) && process.env.SERVE_FRONTEND !== 
   });
 }
 
-// Health (both paths — /health is conventional, /__health kept for compat)
-function healthHandler(_req, res) {
-  const ready =
-    !!Kowloon?.mongoose && Kowloon.mongoose.connection?.readyState === 1;
-  res.json({
-    ok: ready,
-    readyState: Kowloon.mongoose?.connection?.readyState ?? -1,
-  });
-}
-app.get("/health",   healthHandler);
-app.get("/__health", healthHandler);
+// Health checks live at routes/health/index.js, auto-mounted at /health —
+// CORS-open so the setup wizard can poll cross-origin, returns 503 on a
+// disconnected DB. (Previously duplicated here as /health + /__health; both
+// were dead code — the auto-mounted router always wins route resolution for
+// /health, and /__health had no caller anywhere in the codebase or infra.)
 
 // Start HTTP
 const port = Number(process.env.PORT || 3000);
