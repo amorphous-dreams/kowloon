@@ -2,6 +2,7 @@
 // workers/backup.js — async backup and restore worker
 // Polls the BackupJob queue, claims jobs atomically, and runs them.
 
+import "dotenv/config"
 import mongoose from 'mongoose'
 import { BackupJob, Settings } from '#schema'
 import { loadSettings } from '#methods/settings/cache.js'

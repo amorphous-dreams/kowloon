@@ -209,23 +209,9 @@ router.get("/logs", async (req, res) => {
   }
 })
 
-router.get("/backup", async (req, res, next) => {
-  try {
-    const db = mongoose.connection.db;
-    const colInfos = await db.listCollections().toArray();
-    const collections = {};
-    for (const col of colInfos) {
-      collections[col.name] = await db.collection(col.name).find({}).toArray();
-    }
-    const exportedAt = new Date().toISOString();
-    const dateStr = exportedAt.split("T")[0];
-    res
-      .setHeader("Content-Disposition", `attachment; filename="kowloon-backup-${dateStr}.json"`)
-      .setHeader("Content-Type", "application/json; charset=utf-8")
-      .json({ exportedAt, collections });
-  } catch (err) {
-    next(err);
-  }
-});
+// Synchronous full-DB JSON export (GET /admin/system/backup) removed in favor
+// of the async job queue at /admin/backup (routes/admin/backup.js) — that one
+// also archives S3-stored files, not just Mongo documents, and doesn't block
+// the event loop loading the entire database into memory.
 
 export default router;

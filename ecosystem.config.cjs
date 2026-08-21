@@ -49,6 +49,16 @@ module.exports = {
       min_uptime: "10s",
       max_memory_restart: "200M",
     },
+    {
+      name: "kowloon-worker-backup",
+      script: "workers/backup.js",
+      watch: false,
+      time: true,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: "10s",
+      max_memory_restart: "300M",
+    },
     // {
     //   name: "kowloon-worker-pull",
     //   script: "workers/pullScheduler.js",
