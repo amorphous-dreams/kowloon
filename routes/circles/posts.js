@@ -149,9 +149,17 @@ export default route(async ({ req, params, query, user, set, setStatus }) => {
     return item;
   });
 
+  const protocol = req.headers["x-forwarded-proto"] || "https";
+  const baseUrl = `${protocol}://${domain}/circles/${encodeURIComponent(circleId)}/posts`;
+
   set("@context", "https://www.w3.org/ns/activitystreams");
   set("type", "OrderedCollectionPage");
+  set("id", req.originalUrl ? `${protocol}://${domain}${req.originalUrl}` : baseUrl);
+  set("partOf", baseUrl);
   set("totalItems", result.total);
   set("orderedItems", orderedItems);
-  if (result.nextCursor) set("nextCursor", result.nextCursor);
+  if (result.nextCursor) {
+    set("nextCursor", result.nextCursor);
+    set("next", `${baseUrl}?before=${encodeURIComponent(result.nextCursor)}`);
+  }
 });
