@@ -193,7 +193,9 @@ async function main() {
   });
   console.log(`  Carol's profile updated to circle-scoped (${carolInnerCircleId}).`);
 
-  // ── Step 5: Wire following (full mesh via Follow) ─────────────────────────
+  // ── Step 5: Wire following (full mesh via Add — Circles are the only
+  //           follow mechanism, following = adding to your own Following
+  //           circle) ────────────────────────────────────────────────────
 
   console.log("→ Wiring cross-follows...");
 
@@ -204,8 +206,9 @@ async function main() {
         .filter((n) => n !== follower)
         .map((followed) =>
           activity(T[follower], {
-            type: "Follow",
+            type: "Add",
             object: U[followed].id,
+            target: U[follower].following,
           })
         )
     )

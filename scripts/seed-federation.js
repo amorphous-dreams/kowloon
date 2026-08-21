@@ -116,7 +116,9 @@ async function main() {
   console.log(`  kwln2 — alice: ${U2.alice.id}, bob: ${U2.bob.id}`);
 
   // ── Step 2: kwln1 users follow kwln2 users ────────────────────────────────
-  // Follow adds the followed user to the follower's system Following circle.
+  // Circles are the only follow mechanism — following adds the followed user
+  // to the follower's own Following circle via Add (same activity
+  // addToCircle()/follow() send client-side; there's no Follow activity type).
   // kwln1's alice and carol follow kwln2's alice.
   // kwln1's bob follows kwln2's bob.
 
@@ -126,9 +128,9 @@ async function main() {
   const k2BobId   = `@bob@${KWLN2_DOMAIN}`;
 
   await Promise.all([
-    k1.post("/outbox", { type: "Follow", object: k2AliceId }, T1.alice),
-    k1.post("/outbox", { type: "Follow", object: k2AliceId }, T1.carol),
-    k1.post("/outbox", { type: "Follow", object: k2BobId },   T1.bob),
+    k1.post("/outbox", { type: "Add", object: k2AliceId, target: U1.alice.following }, T1.alice),
+    k1.post("/outbox", { type: "Add", object: k2AliceId, target: U1.carol.following }, T1.carol),
+    k1.post("/outbox", { type: "Add", object: k2BobId,   target: U1.bob.following   }, T1.bob),
   ]);
 
   console.log(`  alice@${KWLN1_DOMAIN} → following alice@${KWLN2_DOMAIN}`);

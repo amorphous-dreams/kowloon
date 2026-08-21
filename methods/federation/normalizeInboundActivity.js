@@ -8,7 +8,6 @@
 //   { type: "Create", actorId: "...", objectType: "Post", to: "@public", canReply: "public", ... }
 
 import { getSetting } from "#methods/settings/cache.js";
-import isLocalDomain from "#methods/parse/isLocalDomain.js";
 
 const AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public";
 
@@ -117,22 +116,6 @@ function normalizeApObject(obj) {
 }
 
 /**
- * Determine if an ID refers to a local resource.
- */
-function isLocalId(id) {
-  if (!id) return false;
-  const domain = getSetting("domain");
-  if (!domain) return false;
-  try {
-    const url = new URL(id);
-    return isLocalDomain(url.hostname);
-  } catch {
-    // Not a URL: check our @handle@domain format
-    return id.includes(`@${domain}`) || id.endsWith(`@${domain}`);
-  }
-}
-
-/**
  * Translate a raw AP activity from a remote server into our internal format.
  * Returns a new object; does not mutate the input.
  */
@@ -193,15 +176,6 @@ export default function normalizeInboundActivity(apActivity) {
     }
     if (!act.object.canReply) act.object.canReply = act.canReply;
     if (!act.object.canReact) act.object.canReact = act.canReact;
-  }
-
-  // --- Inbound Follow: normalize object to a local user ID ---
-  // AP `object` for Follow is the actor being followed (a URL).
-  // If it's one of our local users, keep it as-is; the Follow handler will look them up.
-  if (act.type === "Follow" && typeof act.object === "string") {
-    // Check if this is an inbound follow (remote follows a local user)
-    // vs outbound follow normalization (shouldn't hit this path for outbound)
-    act._inboundFollow = isLocalId(act.object);
   }
 
   // --- Timestamps ---

@@ -17,12 +17,6 @@ export default function preprocess(activity = {}) {
     }
   }
 
-  if (activity.type === "Follow" && activity.object && typeof activity.object === "object") {
-    if (activity.object.actorId && typeof activity.object.actorId === "string") {
-      activity.object = activity.object.actorId;
-    }
-  }
-
   if (activity.type === "Create") {
     const obj = activity.object;
     if (!obj || typeof obj !== "object" || !obj.type) {

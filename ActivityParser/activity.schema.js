@@ -51,14 +51,12 @@ const schema = {
     id: { type: "string" },
     type: {
       enum: [
-        "Accept",    // AP: Accept{Follow}
         "Add",
         "Announce",  // AP: Boost/share
         "Block",
         "Create",
         "Delete",
         "Flag",
-        "Follow",
         "Join",
         "Leave",
         "Mute",
@@ -66,8 +64,7 @@ const schema = {
         "Remove",
         "Reply",
         "Unblock",
-        "Undo",      // AP: Undo{Follow}, Undo{Like}, etc.
-        "Unfollow",
+        "Undo",      // AP: Undo{Like}, etc.
         "Unmute",
         "Update",
       ],

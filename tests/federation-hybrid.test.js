@@ -109,6 +109,7 @@ async function test1_createUsers() {
       id: data.user.id,
       username: "alice",
       token: data.token,
+      following: data.user.following,
     };
   }
 
@@ -143,6 +144,9 @@ async function test2_createPost(users) {
 }
 
 // Test 3: Alice on kowloon.net follows Alice on kwln.org
+// Circles are the only follow mechanism — following someone is adding them
+// to your own Following circle (same activity addToCircle()/follow() send
+// client-side; there is no dedicated Follow activity type).
 async function test3_follow(users) {
   logStep(3, "Alice@kowloon follows Alice@kwln");
 
@@ -150,8 +154,9 @@ async function test3_follow(users) {
     method: "POST",
     token: users.kowloon.token,
     body: JSON.stringify({
-      type: "Follow",
+      type: "Add",
       object: users.kwln.id,
+      target: users.kowloon.following,
     }),
   });
 

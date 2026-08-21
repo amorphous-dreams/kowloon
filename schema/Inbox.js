@@ -21,7 +21,7 @@ const InboxSchema = new Schema(
     remoteId: { type: String, index: true, sparse: true }, // sender's Activity id
     domain: { type: String, index: true }, // resolved from Host / signature
     actorId: { type: String, index: true }, // "@alice@remote.tld"
-    type: { type: String, index: true }, // "Create" | "Follow" | ...
+    type: { type: String, index: true }, // "Create" | "Add" | ...
     receivedAt: { type: Date, default: Date.now, index: true },
 
     // Verification metadata

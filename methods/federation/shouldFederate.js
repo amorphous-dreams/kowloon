@@ -59,7 +59,7 @@ function isAddressedToSelf(to, localDomain) {
  * RULES:
  * 1. Never push if addressed to local server (@kwln.org)
  * 2. Never push to @public (pull-based)
- * 3. Never push Follow/Unfollow/Block/Mute/Circle operations (private)
+ * 3. Never push Block/Mute/Circle operations (private)
  * 4. Only push when directly interacting with remote resources
  *
  * @param {Object} activity - The activity to check
@@ -80,7 +80,7 @@ export default function shouldFederate(activity) {
   if (to === "@public") return false;
 
   // RULE: Never push private operations (even if remote resources involved)
-  const privateOperations = ["Follow", "Unfollow", "Block", "Mute"];
+  const privateOperations = ["Block", "Mute"];
   if (privateOperations.includes(type)) return false;
 
   // RULE: Push only when directly interacting with remote resources
@@ -119,7 +119,6 @@ export default function shouldFederate(activity) {
       return false;
     }
 
-    case "Accept":
     case "Reject": {
       // Push if accepting/rejecting a remote request
       const requestObject = object?.id || object;
