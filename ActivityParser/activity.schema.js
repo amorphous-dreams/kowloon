@@ -81,7 +81,6 @@ const schema = {
       enum: [
         "Bookmark",
         "Circle",
-        "Delete",
         "Group",
         "Page",
         "Post",

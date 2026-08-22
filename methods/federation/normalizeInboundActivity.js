@@ -58,7 +58,6 @@ const AP_TYPE_TO_OBJECT_TYPE = {
   person:   "User",
   group:    "Group",
   service:  "User",
-  tombstone: "Delete",
 };
 
 /**
@@ -164,11 +163,6 @@ export default function normalizeInboundActivity(apActivity) {
     if (act.objectType === "Post" && !act.object.type?.match(/^(Note|Article|Media|Event|Link)$/)) {
       act.object = { ...act.object, type: AP_TYPE_TO_POST_TYPE[apType] ?? "Note" };
     }
-  }
-
-  // For Delete/Tombstone: objectType may just be "Delete"
-  if (act.type === "Delete" && !act.objectType) {
-    act.objectType = "Delete";
   }
 
   // --- to / visibility ---
