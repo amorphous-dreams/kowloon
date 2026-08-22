@@ -85,8 +85,11 @@ async function test1_createUsers() {
 
   for (const [name, baseUrl] of Object.entries(SERVERS)) {
     if (WIPE) {
-      logInfo(`Wiping database for ${name}...`);
-      await request(name, "/__test/wipe", { method: "POST" });
+      throw new Error(
+        "WIPE=1 relied on POST /__test/wipe, which has been removed " +
+        "(issue #51 -- unauthenticated DB-wipe endpoint). Wipe the target database " +
+        "directly instead, e.g. `mongosh <MONGO_URI> --eval 'db.dropDatabase()'`."
+      );
     }
 
     logInfo(`Creating user alice@${name}...`);

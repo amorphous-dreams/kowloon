@@ -205,12 +205,6 @@ router.get("/__routes", (_req, res) => {
   res.json({ total: routes.length, routes });
 });
 
-// **TESTING ONLY** - Database wipe endpoint (remove in production)
-if (process.env.NODE_ENV !== "production") {
-  const testWipe = await import("./test-wipe.js");
-  router.post("/__test/wipe", testWipe.default);
-}
-
 // Note: /inbox is now auto-mounted from routes/inbox/index.js directory
 
 // Optional: log at boot

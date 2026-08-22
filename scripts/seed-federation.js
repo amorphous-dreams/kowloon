@@ -65,12 +65,11 @@ async function main() {
 
   // ── Step 0: Wipe + seed both servers ──────────────────────────────────────
 
-  console.log("→ Wiping and re-seeding both servers...");
-  await Promise.all([
-    request(KWLN1_URL, "POST", "/__test/wipe", {}),
-    request(KWLN2_URL, "POST", "/__test/wipe", {}),
-  ]);
-  console.log("  Wiped both servers.");
+  throw new Error(
+    "This script's auto-wipe relied on POST /__test/wipe, which has been removed " +
+    "(issue #51 -- unauthenticated DB-wipe endpoint). Wipe both databases directly " +
+    "instead, e.g. `mongosh <MONGO_URI> --eval 'db.dropDatabase()'`, then re-run this script."
+  );
 
   const { execSync } = await import("child_process");
   const seedScript = new URL("./seed-test.js", import.meta.url).pathname;

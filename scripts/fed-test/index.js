@@ -50,12 +50,11 @@ const fromPhase = parseInt(args['from-phase'] || '1');
 const should = (n) => (onlyPhase === null || onlyPhase === n) && n >= fromPhase;
 
 async function wipeServers() {
-  console.log('Wiping all servers...');
-  await Promise.all(SERVERS.map(async (server) => {
-    const res = await fetch(`${server.baseUrl}/__test/wipe`, { method: 'POST' });
-    if (!res.ok) throw new Error(`Wipe failed on ${server.name}: ${res.status}`);
-    console.log(`  [${server.name}] Wiped`);
-  }));
+  throw new Error(
+    "wipeServers() relied on POST /__test/wipe, which has been removed " +
+    "(issue #51 -- unauthenticated DB-wipe endpoint). Wipe each server's database " +
+    "directly instead, e.g. `mongosh <MONGO_URI> --eval 'db.dropDatabase()'`, then re-run with --no-wipe."
+  );
 }
 
 async function main() {

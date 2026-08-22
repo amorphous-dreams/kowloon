@@ -133,9 +133,8 @@ MongoDB via Mongoose. Connection URI from env: `MONGO_URI` (or `MONGODB_URI`, `M
 ### Testing
 
 - `scripts/seed-test.js` — Deterministic seed: 4 users (alice/bob/carol/dave) with every visibility permutation for circles, groups, posts, bookmarks. Password: `testpass`. Tagged with `meta.runId: "test"`.
-- `scripts/seed-test.js --wipe` — Wipe test data then re-seed
 - `scripts/seed.js` — Random seed with faker (configurable counts)
-- `POST /__test/wipe` — Wipes all collections except settings (non-production only)
+- To wipe a test database, connect directly: `mongosh <MONGO_URI> --eval 'db.dropDatabase()'`, or use `scripts/wipe.js --runId=<id>` for a runId-scoped wipe. `POST /__test/wipe` was removed (issue #51 — it was an unauthenticated DB-wipe endpoint, gated only by `NODE_ENV`, reachable over the network).
 
 #### Seeding gotchas
 
