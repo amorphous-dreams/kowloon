@@ -165,8 +165,8 @@ export async function fetchMeta(pathname, req) {
     const image = resolveImageUrl(group.icon, domain, proto) || siteHero || siteIcon;
     return {
       ...defaults,
-      title: `${group.name} — ${siteName}`,
-      description: excerpt(group.description || `${group.name} group on ${siteName}`),
+      title: `${group.name} -- ${siteName}`,
+      description: excerpt(group.summary || `${group.name} group on ${siteName}`),
       image,
       type: "website",
       kowloonId: group.id,
@@ -175,7 +175,7 @@ export async function fetchMeta(pathname, req) {
         "@context": "https://schema.org",
         "@type": "Organization",
         name: group.name,
-        description: group.description || "",
+        description: group.summary || "",
         image,
         url: `${base}${pathname}`,
       }),

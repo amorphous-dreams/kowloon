@@ -19,7 +19,7 @@ test("members-only roster is enforced", async () => {
 
   const groupCreate = await createGroup(admin, {
     name: "Test Group",
-    description: "hello",
+    summary: "hello",
   });
 
   // Extract the group id (from your Create response)

@@ -61,7 +61,7 @@ const SEARCHABLE = {
   },
   Group: {
     model: Group,
-    select: "id name description icon url memberCount to createdAt",
+    select: "id name summary icon url memberCount to createdAt",
   },
   Bookmark: {
     model: Bookmark,

@@ -9,7 +9,7 @@ import { getServerActor } from "#methods/settings/schemaHelpers.js";
 const router = express.Router({ mergeParams: true });
 
 const ALLOWED_FIELDS = [
-  "name", "description", "icon", "rsvpPolicy",
+  "name", "summary", "icon", "rsvpPolicy",
   "to", "canReply", "canReact", "urls", "location",
 ];
 

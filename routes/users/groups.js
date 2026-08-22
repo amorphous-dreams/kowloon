@@ -72,7 +72,7 @@ export default route(async ({ req, params, query, user, set }) => {
   const [docs, total] = await Promise.all([
     Group.find(filter)
       .select(
-        "id name description icon image to rsvpPolicy memberCount url createdAt updatedAt"
+        "id name summary icon image to rsvpPolicy memberCount url createdAt updatedAt"
       )
       .sort({ createdAt: -1 })
       .skip(skip)

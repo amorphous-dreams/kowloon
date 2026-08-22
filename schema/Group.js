@@ -21,7 +21,7 @@ const GroupSchema = new Schema(
 
     // Presentation
     name: { type: String, default: undefined },
-    description: { type: String, default: undefined },
+    summary: { type: String, default: undefined },
     icon: { type: String, default: undefined }, // File ID or URL for backwards compatibility
     image: { type: String, default: undefined }, // Hero / banner image
     urls: { type: [String], default: [] },
@@ -191,7 +191,7 @@ GroupSchema.pre("save", async function (next) {
   }
 });
 
-GroupSchema.index({ name: 'text', description: 'text' });
+GroupSchema.index({ name: 'text', summary: 'text' });
 
 GroupSchema.methods.verifySignature = async function () {
   return verifyAs(this.actorId, `${this.id}|${this.name || ""}|${this.to}`, this.signature);

@@ -59,10 +59,11 @@ async function main() {
   // ── Wipe ──────────────────────────────────────────────────────────────────
 
   if (args.has("--wipe") || args.has("--wipe-only")) {
-    console.log("→ Wiping database...");
-    await POST("/__test/wipe", {});
-    console.log("  Wiped.");
-    if (args.has("--wipe-only")) process.exit(0);
+    throw new Error(
+      "--wipe/--wipe-only relied on POST /__test/wipe, which has been removed " +
+      "(issue #51 -- unauthenticated DB-wipe endpoint). Wipe the target database " +
+      "directly instead, e.g. `mongosh <MONGO_URI> --eval 'db.dropDatabase()'`."
+    );
   }
 
   // ── Step 1: Register users ────────────────────────────────────────────────
@@ -252,15 +253,15 @@ async function main() {
     const [pub, srv, cir] = await Promise.all([
       activity(token, {
         type: "Create", objectType: "Group", to: "@public",
-        object: { type: "Group", name: `${name}'s Public Group`, description: `Open group by ${name}`, rsvpPolicy: "open" },
+        object: { type: "Group", name: `${name}'s Public Group`, summary: `Open group by ${name}`, rsvpPolicy: "open" },
       }),
       activity(token, {
         type: "Create", objectType: "Group", to: `@${DOMAIN}`,
-        object: { type: "Group", name: `${name}'s Server Group`, description: `Server-only group by ${name}`, rsvpPolicy: "serverOpen" },
+        object: { type: "Group", name: `${name}'s Server Group`, summary: `Server-only group by ${name}`, rsvpPolicy: "serverOpen" },
       }),
       activity(token, {
         type: "Create", objectType: "Group", to: C[name].public.id,
-        object: { type: "Group", name: `${name}'s Circle Group`, description: `Circle-scoped group by ${name}`, rsvpPolicy: "approvalOnly" },
+        object: { type: "Group", name: `${name}'s Circle Group`, summary: `Circle-scoped group by ${name}`, rsvpPolicy: "approvalOnly" },
       }),
     ]);
 

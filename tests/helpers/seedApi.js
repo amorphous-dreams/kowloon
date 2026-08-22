@@ -55,11 +55,11 @@ export async function createUser(
   return json;
 }
 
-export async function createGroup(client, { name, description }) {
+export async function createGroup(client, { name, summary }) {
   const { status, json } = await client.postOutbox({
     type: "Create",
     objectType: "Group",
-    object: { name, description },
+    object: { name, summary },
     to: "@public",
   });
   if (status !== 200 && status !== 201)

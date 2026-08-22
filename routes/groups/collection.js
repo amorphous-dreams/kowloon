@@ -39,7 +39,7 @@ export default makeCollection({
     return filter;
   },
   select:
-    "id name description icon to rsvpPolicy memberCount url createdAt updatedAt",
+    "id name summary icon to rsvpPolicy memberCount url createdAt updatedAt",
   sanitize: (doc) => {
     const { _id, __v, ...rest } = doc;
     return rest;

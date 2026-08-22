@@ -33,10 +33,10 @@ router.get("/:id/posts", async (req, res, next) => {
   const proto = req.headers["x-forwarded-proto"] || "https";
   const base = `${proto}://${domain}`;
   const xml = toRSS(docs.map(feedItemToPost), {
-    title: `${group.name || groupId} — ${domain}`,
+    title: `${group.name || groupId} -- ${domain}`,
     link: `${base}/groups/${encodeURIComponent(groupId)}`,
     feedLink: `${base}/groups/${encodeURIComponent(groupId)}/posts?rss`,
-    description: group.description || `Posts from the ${group.name || groupId} group`,
+    description: group.summary || `Posts from the ${group.name || groupId} group`,
     domain,
   });
   res.set("Content-Type", "text/xml; charset=UTF-8").send(xml);

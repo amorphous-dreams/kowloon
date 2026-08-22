@@ -258,7 +258,7 @@ describe("Groups Collection Visibility", () => {
     const publicGroup = await alice.postOutbox({
       type: "Create",
       objectType: "Group",
-      object: { name: "Public Group", description: "Everyone can see" },
+      object: { name: "Public Group", summary: "Everyone can see" },
       to: "@public",
     });
     publicGroupId =
@@ -272,7 +272,7 @@ describe("Groups Collection Visibility", () => {
       objectType: "Group",
       object: {
         name: "Domain Group",
-        description: "Only kwln.org users",
+        summary: "Only kwln.org users",
       },
       to: "@kwln.org",
     });
@@ -300,7 +300,7 @@ describe("Groups Collection Visibility", () => {
     const circleGroup = await alice.postOutbox({
       type: "Create",
       objectType: "Group",
-      object: { name: "Secret Group", description: "Circle members only" },
+      object: { name: "Secret Group", summary: "Circle members only" },
       to: circleId,
     });
     circleGroupId =
