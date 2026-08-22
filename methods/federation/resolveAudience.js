@@ -68,22 +68,7 @@ async function resolveInbox(actorId) {
       }
     }
 
-    // Try to construct inbox URL from actorId if it's a URL
-    try {
-      const actorUrl = new URL(actorId);
-      if (actorUrl.protocol === "https:") {
-        // Try common inbox patterns
-        const baseUrl = `${actorUrl.protocol}//${actorUrl.host}`;
-        const username = actorUrl.pathname.split("/").filter(Boolean).pop();
-        if (username) {
-          return `${baseUrl}/users/${username}/inbox`;
-        }
-      }
-    } catch {
-      // Not a URL
-    }
-
-    // Handle @user@domain format as last resort
+    // Construct the inbox URL from actorId -- always "@user@domain" now, never a URL
     const handleMatch = actorId.match(/^@([^@]+)@(.+)$/);
     if (handleMatch) {
       const [, username, domain] = handleMatch;

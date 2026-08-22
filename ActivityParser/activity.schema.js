@@ -52,7 +52,6 @@ const schema = {
     type: {
       enum: [
         "Add",
-        "Announce",  // AP: Boost/share
         "Block",
         "Create",
         "Delete",
@@ -73,15 +72,13 @@ const schema = {
     actorId: {
       type: "string",
       anyOf: [
-        { pattern: patterns.actorId },         // @user@domain
+        { pattern: patterns.actorId },         // @user@domain -- local AND remote actors
         { pattern: patterns.serverHandle },    // @domain
-        { pattern: "^https?://" },             // URL (remote AP actors)
       ],
     },
     objectType: {
       type: "string",
       enum: [
-        "Announce",
         "Bookmark",
         "Circle",
         "Delete",

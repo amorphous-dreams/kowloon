@@ -11,6 +11,26 @@ import { getSetting } from "#methods/settings/cache.js";
 
 const AS_PUBLIC = "https://www.w3.org/ns/activitystreams#Public";
 
+// Kowloon actorIds are always "@user@domain" or "@domain" -- no exceptions, even
+// for remote AP actors (see activity.schema.js). Remote servers send a raw actor
+// URL (e.g. "https://remote.example/users/bob"); convert it to our handle format
+// before it ever reaches validation. Assumes the same ".../users/username" path
+// convention Kowloon's own actor URLs use -- if a remote actor's URL doesn't fit
+// that shape, this falls back to a bare server handle rather than guessing wrong.
+function actorRefToHandle(ref) {
+  if (!ref) return null;
+  const s = String(ref).trim();
+  if (s.startsWith("@")) return s; // already our handle format
+  try {
+    const url = new URL(s);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const username = segments.at(-1);
+    return username ? `@${username}@${url.hostname}` : `@${url.hostname}`;
+  } catch {
+    return s; // not a URL and not already a handle -- let schema validation reject it
+  }
+}
+
 // ActivityPub object types → our internal Post type field
 const AP_TYPE_TO_POST_TYPE = {
   note:     "Note",
@@ -77,7 +97,7 @@ function normalizeContent(obj) {
 }
 
 /**
- * Normalize an AP object embedded in Create/Update/Announce.
+ * Normalize an AP object embedded in Create/Update.
  */
 function normalizeApObject(obj) {
   if (!obj || typeof obj !== "object") return obj;
@@ -85,9 +105,10 @@ function normalizeApObject(obj) {
 
   // Normalize actorId: AP uses attributedTo
   if (!out.actorId && out.attributedTo) {
-    out.actorId = typeof out.attributedTo === "string"
+    const attributedRef = typeof out.attributedTo === "string"
       ? out.attributedTo
       : out.attributedTo?.id;
+    out.actorId = actorRefToHandle(attributedRef);
   }
 
   // Map published/updated to our timestamps
@@ -130,7 +151,8 @@ export default function normalizeInboundActivity(apActivity) {
   // --- actorId: AP uses `actor` field (URL string or object) ---
   if (!act.actorId) {
     const actor = act.actor;
-    act.actorId = typeof actor === "string" ? actor : actor?.id ?? null;
+    const actorRef = typeof actor === "string" ? actor : actor?.id ?? null;
+    act.actorId = actorRefToHandle(actorRef);
   }
 
   // --- objectType: infer from embedded object type or top-level type ---
@@ -167,7 +189,7 @@ export default function normalizeInboundActivity(apActivity) {
     act.canReact = vis === "@public" ? "public" : "audience";
   }
 
-  // --- Normalize embedded object for Create/Update/Announce ---
+  // --- Normalize embedded object for Create/Update ---
   if (act.object && typeof act.object === "object") {
     act.object = normalizeApObject(act.object);
     // Copy visibility down if not set on object

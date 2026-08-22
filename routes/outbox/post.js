@@ -91,16 +91,22 @@ export default route(
       }
     }
 
-    // Ensure to/canReact/canReply exist on activity + object (don't override if present)
+    // Ensure to/canReact/canReply exist on activity + object (don't override if present).
+    // Default to the actor's own id, not "" — canSeeObject() treats an empty/missing
+    // `to` as server-wide visible (methods/visibility/helpers.js), so an unspecified
+    // audience used to silently mean "visible to everyone on the server" rather than
+    // "private." Defaulting to the actor's own id makes the safe default actually
+    // private: canSeeObject()'s owner-always-sees-own-content check still applies to
+    // the actor, and everyone else falls through to its final `return false`.
     // For Update activities, activity.object is a patch — don't inject defaults into it.
     const injectIntoObject = activity.type !== "Update" && activity.type !== "Delete";
-    if (!("to" in activity)) activity.to = "";
-    if (!("canReact" in activity)) activity.canReact = "";
-    if (!("canReply" in activity)) activity.canReply = "";
+    if (!("to" in activity)) activity.to = activity.actorId;
+    if (!("canReact" in activity)) activity.canReact = activity.actorId;
+    if (!("canReply" in activity)) activity.canReply = activity.actorId;
     if (injectIntoObject && isObj(activity.object)) {
-      if (!("to" in activity.object)) activity.object.to = "";
-      if (!("canReact" in activity.object)) activity.object.canReact = "";
-      if (!("canReply" in activity.object)) activity.object.canReply = "";
+      if (!("to" in activity.object)) activity.object.to = activity.actorId;
+      if (!("canReact" in activity.object)) activity.object.canReact = activity.actorId;
+      if (!("canReply" in activity.object)) activity.object.canReply = activity.actorId;
     }
 
     // Normalize shorthand audience values → ActivityStreams-style addressing

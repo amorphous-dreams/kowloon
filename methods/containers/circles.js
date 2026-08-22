@@ -135,14 +135,17 @@ export async function batchGetMembers(circleIds) {
 function extractDomain(actorId) {
   if (!actorId) return null;
 
-  // Try URL parsing first
+  // Kowloon actorIds are always "@user@domain" or "@domain" -- check that first.
+  if (actorId.startsWith("@")) {
+    const parts = actorId.split("@").filter(Boolean);
+    return parts.length > 0 ? parts[parts.length - 1] : null;
+  }
+
   try {
     const url = new URL(actorId);
     return url.hostname;
   } catch {
-    // Fall back to @-based parsing
-    const parts = actorId.split("@").filter(Boolean);
-    return parts.length > 0 ? parts[parts.length - 1] : null;
+    return null;
   }
 }
 
