@@ -91,23 +91,25 @@ export default route(
       }
     }
 
-    // Ensure to/canReact/canReply exist on activity + object (don't override if present).
+    // Ensure to/canReact/canReply exist on the activity (don't override if present).
     // Default to the actor's own id, not "" — canSeeObject() treats an empty/missing
     // `to` as server-wide visible (methods/visibility/helpers.js), so an unspecified
     // audience used to silently mean "visible to everyone on the server" rather than
     // "private." Defaulting to the actor's own id makes the safe default actually
     // private: canSeeObject()'s owner-always-sees-own-content check still applies to
     // the actor, and everyone else falls through to its final `return false`.
-    // For Update activities, activity.object is a patch — don't inject defaults into it.
-    const injectIntoObject = activity.type !== "Update" && activity.type !== "Delete";
+    //
+    // Deliberately activity-level only — do NOT also inject into activity.object.
+    // The client (createPost et al.) has always sent to/canReply/canReact at the
+    // activity level only, leaving object.to/canReply/canReact unset. Create's own
+    // handler copies activity.to down onto object.to precisely when object.to is
+    // falsy/"" (see ActivityParser/handlers/Create/index.js) — pre-filling object.to
+    // here with a truthy value defeats that fallback and makes Create silently keep
+    // the wrong (private-to-actor) value even when activity.to correctly says
+    // "@public". Regressed exactly this way once already; don't reintroduce it.
     if (!("to" in activity)) activity.to = activity.actorId;
     if (!("canReact" in activity)) activity.canReact = activity.actorId;
     if (!("canReply" in activity)) activity.canReply = activity.actorId;
-    if (injectIntoObject && isObj(activity.object)) {
-      if (!("to" in activity.object)) activity.object.to = activity.actorId;
-      if (!("canReact" in activity.object)) activity.object.canReact = activity.actorId;
-      if (!("canReply" in activity.object)) activity.object.canReply = activity.actorId;
-    }
 
     // Normalize shorthand audience values → ActivityStreams-style addressing
     if (activity.to === "public") activity.to = "@public";
