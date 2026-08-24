@@ -15,12 +15,76 @@ import { getViewerContext } from "#methods/visibility/context.js";
 import { buildVisibilityQuery } from "#methods/visibility/filter.js";
 import { canSeeFolderChain } from "#methods/bookmarks/visibility.js";
 import { getSetting } from "#methods/settings/cache.js";
+import kowloonId from "#methods/parse/kowloonId.js";
+import isLocalDomain from "#methods/parse/isLocalDomain.js";
 
 const SELECT =
   "id type title summary href target image tags to parentFolder actorId url body createdAt updatedAt";
 
+// Bookmarks never federate or get cached locally (personal utility -- see
+// schema/Bookmark.js), so unlike remote User profiles there's no local shadow
+// copy to read. Fetch the remote user's bookmarks live from their own server
+// instead. The request is anonymous (we have no session on the remote
+// server), so it only ever sees whatever that server shows a logged-out
+// viewer -- i.e. its @public bookmarks/folders. That's the correct scope:
+// there's no mechanism for a Kowloon user to grant a specific remote viewer
+// server-only access to their bookmarks. Fails soft (empty result) on any
+// network error, timeout, or non-2xx -- someone else's server being slow or
+// down shouldn't surface as a hard error here.
+async function fetchRemoteBookmarks(userId, remoteDomain, query) {
+  const params = new URLSearchParams();
+  if (query.parentFolder) params.set("parentFolder", query.parentFolder);
+  if (query.type) params.set("type", query.type);
+  if (query.page) params.set("page", query.page);
+  if (query.limit) params.set("limit", query.limit);
+  const qs = params.toString();
+  const url = `https://${remoteDomain}/users/${encodeURIComponent(userId)}/bookmarks${qs ? `?${qs}` : ""}`;
+
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      redirect: "follow",
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return { orderedItems: [], totalItems: 0 };
+    const data = await res.json();
+    const items = data?.orderedItems || data?.items || [];
+    return { orderedItems: items, totalItems: data?.totalItems ?? items.length };
+  } catch {
+    return { orderedItems: [], totalItems: 0 };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default route(async ({ req, params, query, user, set, setStatus }) => {
   const userId = decodeURIComponent(params.id);
+
+  // Remote user: proxy live, no local visibility/folder logic applies (the
+  // remote server enforces its own).
+  const { domain: userDomain } = kowloonId(userId);
+  if (userDomain && !isLocalDomain(userDomain)) {
+    const { orderedItems, totalItems } = await fetchRemoteBookmarks(userId, userDomain, query);
+    const page = Math.max(1, parseInt(query.page, 10) || 1);
+    const limit = Math.min(Math.max(1, parseInt(query.limit, 10) || 20), 100);
+    const domain = getSetting("domain");
+    const protocol = req.headers["x-forwarded-proto"] || "https";
+    const base = `${protocol}://${domain}${req.baseUrl}`;
+    const collection = activityStreamsCollection({
+      id: `${base}?page=${page}`,
+      orderedItems,
+      totalItems,
+      page,
+      itemsPerPage: limit,
+      baseUrl: base,
+    });
+    for (const [k, v] of Object.entries(collection)) set(k, v);
+    return;
+  }
+
   const viewerId = user?.id || null;
   const isOwner = !!viewerId && viewerId === userId;
   const ctx = await getViewerContext(viewerId);
