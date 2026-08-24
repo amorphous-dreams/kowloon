@@ -58,6 +58,30 @@ export async function canSeeBookmark(doc, ctx) {
   return canSeeFolderChain(doc.parentFolder, ctx);
 }
 
+// Server-owned bookmarks (routes/admin/bookmarks.js) are policy-capped to
+// exactly one level of nesting -- a top-level Folder may contain Bookmarks,
+// but Folders may never contain other Folders. This is a stricter,
+// feature-specific rule distinct from the generic MAX_FOLDER_DEPTH cap
+// above (which still governs personal bookmark folders via the schema's
+// own pre-save hook). Throws if parentFolderId doesn't reference an
+// existing top-level Folder.
+export async function assertAdminBookmarkParentIsTopLevel(parentFolderId) {
+  if (!parentFolderId) return;
+  const parent = await Bookmark.findOne({
+    id: parentFolderId,
+    type: "Folder",
+    deletedAt: null,
+  })
+    .select("id parentFolder")
+    .lean();
+  if (!parent) {
+    throw new Error("parentFolder does not reference an existing Folder");
+  }
+  if (parent.parentFolder) {
+    throw new Error("Server bookmarks support only one level of folder nesting");
+  }
+}
+
 // Walk parentFolderId's ancestor chain and throw if placing a folder at
 // that position would exceed MAX_FOLDER_DEPTH, cycle, or reference a
 // missing parent. selfId is the moving/creating folder's own id (used to
