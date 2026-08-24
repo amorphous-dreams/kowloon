@@ -22,9 +22,12 @@ const UserSchemaDef = {
   type: { type: String, default: "Person" },
 
   // AS/AP alias: preferredUsername <-> username
+  // NOT globally unique -- see the compound index below. Two real users on
+  // two different servers can legitimately share a bare username (e.g.
+  // "jzellis" registered on both kwln.social and kwln.city); only id/actorId
+  // (which embed the domain) are actually globally unique.
   username: {
     type: String,
-    unique: true,
     required: true,
     alias: "preferredUsername",
   },
@@ -158,6 +161,11 @@ const UserSchema = new mongoose.Schema(UserSchemaDef, {
   toObject: { virtuals: true },
   timestamps: true,
 });
+
+/** ---------- Uniqueness ---------- */
+// Scoped by originDomain, not global -- see the comment on the username
+// field above. Replaces the old global-unique index on username alone.
+UserSchema.index({ username: 1, originDomain: 1 }, { unique: true });
 
 /** ---------- Text & dev indexes ---------- */
 UserSchema.index({
