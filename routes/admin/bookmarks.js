@@ -17,7 +17,7 @@ import { assertAdminBookmarkParentIsTopLevel } from "#methods/bookmarks/visibili
 const router = express.Router({ mergeParams: true });
 
 const ALLOWED_FIELDS = [
-  "title", "type", "href", "target", "image", "tags", "to", "parentFolder",
+  "title", "summary", "type", "href", "target", "image", "tags", "to", "parentFolder",
 ];
 
 function sanitize(doc) {
